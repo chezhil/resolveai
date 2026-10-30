@@ -74,6 +74,20 @@ export const SCENARIOS: Scenario[] = [
       rt.advance(rt.config.stuckAfterMin + 2);
     },
   },
+  {
+    id: "G",
+    tag: "Workflow D · Duplicate debit",
+    title: "Customer paid ₹1,800 twice",
+    persona: "Arjun Electronics, SP Road · English · one double-tap, two credits",
+    merchantId: "M1003",
+    channel: "whatsapp",
+    text: "customer says he was debited 1800 two times for one bill",
+    expect: "L1 · both credits confirmed in the ledger, only the later payment refunded, verified",
+    run: (rt) => {
+      rt.world.injectDuplicateDebit("M1003", 1800);
+      rt.inbound("M1003", "customer says he was debited 1800 two times for one bill", "whatsapp");
+    },
+  },
   say({
     id: "F",
     tag: "Guardrail · Ambiguity",

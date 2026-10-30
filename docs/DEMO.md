@@ -26,6 +26,10 @@ Click **B · Priya's ₹1.84 L settlement** (Hinglish).
 - The release is above the L1 cap, so it lands in the **one-click approval** card (L2). The merchant is told what happens next.
 - It's above ₹1 L, so the **two-person rule** applies: click **Approve as Ops lead**, show that the same button is now disabled, then click **Approve as Risk lead**. Then **+1 day**. It closes only once the **UTR** exists.
 
+## Optional · Guided demo
+
+The **Guided demo** card at the top of the console walks A → +1 day → B → two approvals → D → G with a caption per step. Use it if you want the stepper to drive, or ignore it and click scenarios yourself. Scenario **G** (duplicate debit) shows the later of two identical payments refunded and the earlier one untouched.
+
 ## 2:00 · Guardrails (D + outage)
 
 Click **D · "Change my payout account, urgent"**.
@@ -39,7 +43,7 @@ Toggle **Model outage**, run **F**, and the case **fails safe** to humans. Toggl
 
 Click **E**: a stuck payment is caught on the event stream and the merchant hears first.
 
-**Evals & shadow** tab → **Run with offline planner** (or Groq → Gemini if keys are set): 28/28 golden cases, including 11 red-team attacks (forged and replayed capabilities, double approval, message floods, repeated injection, least privilege, velocity, history rewrite, PII leaks), asserted on the ledger, settlement and dispute systems. In the shadow replay the agent makes the right call on 93% of tickets vs 79% for humans. Be upfront about the one miss: there's no duplicate-debit workflow yet, so it escalates.
+**Evals & shadow** tab → **Run with offline planner** (or Groq → Gemini if keys are set): 32/32 golden cases, including 11 red-team attacks (forged and replayed capabilities, double approval, message floods, repeated injection, least privilege, velocity, history rewrite, PII leaks), asserted on the ledger, settlement and dispute systems. In the shadow replay the agent makes the right call on 93% of tickets vs 79% for humans. Be upfront about the one miss: there's no duplicate-debit workflow yet, so it escalates.
 
 **Audit log** → **Tamper: rewrite chain**: the attacker re-hashes everything so the chain still says *valid*, yet the published anchors flag the rewrite. Say: "even someone with database access can't rewrite history quietly."
 

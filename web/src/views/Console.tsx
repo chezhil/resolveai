@@ -3,10 +3,11 @@ import type { Announcement, Meta, Snapshot, TraceEvent } from "../lib/api";
 import { api } from "../lib/api";
 import { Trace } from "../components/Trace";
 import { CasePanel } from "../components/CasePanel";
+import { DemoGuide } from "../components/DemoGuide";
 import { PayerPhone, Phone, Soundbox } from "../components/Phone";
 import { Button, Pill, SectionLabel, cx } from "../components/ui";
 
-const TAG_TONE: Record<string, string> = { A: "bg-sun", B: "bg-sky", C: "bg-rose", D: "bg-ember", E: "bg-mint", F: "bg-peach" };
+const TAG_TONE: Record<string, string> = { A: "bg-sun", B: "bg-sky", C: "bg-rose", D: "bg-ember", E: "bg-mint", F: "bg-peach", G: "bg-sun" };
 
 interface Props {
   snap: Snapshot;
@@ -42,6 +43,7 @@ export function Console({ snap, meta, traces, live, selected, select }: Props) {
     <div className="grid grid-cols-1 gap-4 xl:grid-cols-[340px_minmax(0,1fr)_360px]">
       {/* Channels */}
       <div className="space-y-3">
+        <DemoGuide snap={snap} />
         <div className="card p-3">
           <SectionLabel>Demo scenarios</SectionLabel>
           <div className="grid gap-1.5">

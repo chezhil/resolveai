@@ -59,6 +59,36 @@ export const TEMPLATES: Record<string, Partial<Record<Lang, Tpl>> & { en: Tpl }>
       return { text, gloss: text };
     },
   },
+  duplicateMerchant: {
+    kn: (a) => ({
+      text: `ನಮಸ್ಕಾರ ${a.name} ಅವರೇ. ಗ್ರಾಹಕರ ಖಾತೆಯಿಂದ ${rupees(+a.amount)} ಎರಡು ಬಾರಿ ಕಡಿತವಾಗಿತ್ತು. ಎರಡನೇ ಪಾವತಿಯನ್ನು ಗ್ರಾಹಕರಿಗೆ ಹಿಂತಿರುಗಿಸಿದ್ದೇವೆ. ಮೊದಲ ಪಾವತಿ ನಿಮ್ಮ ಖಾತೆಯಲ್ಲಿ ಹಾಗೆಯೇ ಇದೆ.`,
+      gloss: `Namaskara ${a.name}. The customer was debited ${rupees(+a.amount)} twice. We've refunded the second payment to the customer. The first payment stays in your account.`,
+    }),
+    hi: (a) => ({
+      text: `नमस्ते ${a.name} जी। ग्राहक के खाते से ${rupees(+a.amount)} दो बार कट गए थे। दूसरा पेमेंट हमने ग्राहक को वापस कर दिया है। पहला पेमेंट आपके खाते में बना हुआ है।`,
+      gloss: `Hello ${a.name}. The customer was debited ${rupees(+a.amount)} twice. We've refunded the second payment. The first payment stays in your account.`,
+    }),
+    en: (a) => {
+      const text = `Hi ${a.name}, the customer was debited ${rupees(+a.amount)} twice for one bill. I've refunded the second payment to them; the first one stays in your account.`;
+      return { text, gloss: text };
+    },
+  },
+  duplicatePayer: {
+    en: (a) => {
+      const text = `We found two identical ${rupees(+a.amount)} payments to ${a.business}. The second one has been refunded to you and will reach your account in about 2 hours. Your first payment was received by the merchant.`;
+      return { text, gloss: text };
+    },
+  },
+  duplicatePending: {
+    en: (a) => {
+      const text = `${a.name}, I can see the customer paid ${rupees(+a.amount)} twice. The refund of the second payment is with our ops lead for a one-click approval, and I'll update you here as soon as it goes through.`;
+      return { text, gloss: text };
+    },
+    kn: (a) => ({
+      text: `${a.name} ಅವರೇ, ಗ್ರಾಹಕರು ${rupees(+a.amount)} ಎರಡು ಬಾರಿ ಪಾವತಿಸಿರುವುದು ಕಾಣುತ್ತಿದೆ. ಎರಡನೇ ಪಾವತಿಯ ಮರುಪಾವತಿ ಅನುಮೋದನೆಗೆ ಕಾಯುತ್ತಿದೆ. ಅನುಮೋದನೆ ಆದ ತಕ್ಷಣ ತಿಳಿಸುತ್ತೇವೆ.`,
+      gloss: `${a.name}, I can see the customer paid ${rupees(+a.amount)} twice. The refund of the second payment is waiting for approval. We'll tell you as soon as it's approved.`,
+    }),
+  },
   settlementPending: {
     hi: (a) => ({
       text: `${a.name} जी, आपका ${rupees(+a.amount)} का सेटलमेंट बैंक अकाउंट के नाम में फर्क की वजह से रुका था। हमने बैंक से नाम वेरिफाई कर लिया है — "${a.holder}" आपके PAN नाम से मैच करता है। रिलीज़ के लिए अप्रूवल लगा दिया है, अप्रूव होते ही 2 घंटे में पैसा आ जाएगा।`,

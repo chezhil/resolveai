@@ -266,6 +266,32 @@ export class World extends EventEmitter {
     return txn;
   }
 
+  /** Two identical, fully credited payments from one payer a couple of minutes apart (a double tap on pay). */
+  injectDuplicateDebit(merchantId: string, amount: number, payer = { vpa: "kiran.s@okaxis", name: "Kiran S" }) {
+    const make = (minutesAgo: number): Txn => {
+      const ts = this.clock - minutesAgo * MIN;
+      const txn: Txn = {
+        txnId: this.id("TXN"),
+        rrn: String(630400000000 + this.seq * 7919),
+        merchantId,
+        payerVpa: payer.vpa,
+        payerName: payer.name,
+        amount,
+        ts,
+        payerDebit: "SUCCESS",
+        beneficiaryCredit: "SUCCESS",
+        creditedAt: ts,
+        soundboxAnnounced: true,
+        bankStatus: "CREDITED",
+      };
+      this.txns.set(txn.txnId, txn);
+      return txn;
+    };
+    const first = make(6);
+    const second = make(4);
+    return { first, second };
+  }
+
   // ---------- seed data ----------
 
   private seed() {
