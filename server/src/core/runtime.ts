@@ -26,6 +26,12 @@ import { PlannerBrain } from "../agent/planner.js";
 import { LlmBrain, configuredProviders, quoteUntrusted, systemPrompt } from "../agent/llm.js";
 import { randomBytes } from "node:crypto";
 import { MockPaytmPg, type PaytmPg } from "../integrations/paytm.js";
+import { CapabilityIssuer } from "./capability.js";
+import { AnchorLog } from "./anchor.js";
+import { MONEY_TOOLS } from "../policy/engine.js";
+import { performance } from "node:perf_hooks";
+
+export class RateLimited extends Error {}
 import { triage, type Triage } from "../agent/triage.js";
 import { detectLang, render, soundboxLine } from "../sim/lang.js";
 
@@ -37,6 +43,10 @@ export interface RuntimeConfig {
   pacingMs: number;
   /** Proactive detector threshold for a pending credit. */
   stuckAfterMin: number;
+  /** Max inbound messages per merchant per 10 simulated minutes. */
+  inboundPerWindow: number;
+  /** Name used for audit anchors (the room id on a deployment). */
+  label: string;
 }
 
 const LEVEL_RANK: Record<Level, number> = { L0: 0, L1: 1, L2: 2, L3: 3 };
@@ -46,6 +56,11 @@ const MAX_TURNS = 14;
 export class Runtime extends EventEmitter {
   world = new World();
   paytm: PaytmPg = new MockPaytmPg(this.world);
+  caps = new CapabilityIssuer();
+  anchors: AnchorLog;
+  security = { rateLimited: 0, anomalies: 0, shredded: 0 };
+  private brainMs: number[] = [];
+  private inboundLog = new Map<string, { at: number; injection: boolean }[]>();
   audit = new AuditLog();
   policy: PolicyConfig = { ...DEFAULT_POLICY };
   config: RuntimeConfig;
@@ -67,10 +82,14 @@ export class Runtime extends EventEmitter {
   constructor(config: Partial<RuntimeConfig> = {}) {
     super();
     this.setMaxListeners(100);
-    this.config = { brain: "auto", shadow: false, chaosModelOutage: false, pacingMs: 0, stuckAfterMin: 10, ...config };
+    this.config = { brain: "auto", shadow: false, chaosModelOutage: false, pacingMs: 0, stuckAfterMin: 10, inboundPerWindow: 8, label: "local", ...config };
+    this.anchors = new AnchorLog(this.config.label);
     this.policy.shadow = this.config.shadow;
     this.world.on("world", (e: WorldEvent) => this.onWorld(e));
-    this.audit.onAppend = (e) => this.emit("audit", e);
+    this.audit.onAppend = (e) => {
+      this.emit("audit", e);
+      this.anchors.maybe(this.audit);
+    };
   }
 
   // ------------------------------------------------------------------ public API
@@ -89,6 +108,7 @@ export class Runtime extends EventEmitter {
   inbound(merchantId: string, text: string, channel: Channel = "whatsapp", opts: { proactive?: boolean } = {}) {
     const merchant = this.world.merchants.get(merchantId);
     if (!merchant) throw new Error(`Unknown merchant ${merchantId}`);
+    if (!opts.proactive) this.screenInbound(merchantId, text);
 
     // Repeat contact on an open case: attach to it instead of opening a duplicate.
     const open = [...this.cases.values()].find((c) => c.merchantId === merchantId && !TERMINAL.has(c.status));
@@ -127,6 +147,7 @@ export class Runtime extends EventEmitter {
       brain: this.brainKind(),
       shadow: this.config.shadow,
       steps: 0,
+      timing: { computeMs: 0 },
     };
     this.cases.set(id, kase);
     this.traces.set(id, []);
@@ -164,19 +185,69 @@ export class Runtime extends EventEmitter {
     return kase;
   }
 
+  /** Rate limiting and anomaly flags on the inbound channel, before any model sees the message. */
+  private screenInbound(merchantId: string, text: string) {
+    const now = this.world.now();
+    const log = (this.inboundLog.get(merchantId) ?? []).filter((x) => now - x.at < 60 * MIN);
+    const recent = log.filter((x) => now - x.at < 10 * MIN);
+    const merchant = this.world.merchants.get(merchantId)!;
+    const flag = (code: string, severity: "medium" | "high", note: string) => {
+      if (merchant.risk.flags.some((f) => f.code === code)) return;
+      merchant.risk.flags.push({ code, severity, note, at: now });
+      this.security.anomalies++;
+      this.audit.append(null, "security", "anomaly.flagged", { merchantId, code, severity, note }, now);
+      this.emitUpdate();
+    };
+    if (recent.length >= this.config.inboundPerWindow) {
+      this.security.rateLimited++;
+      flag("INBOUND_FLOOD", "medium", `${recent.length + 1} messages in 10 minutes`);
+      this.audit.append(null, "security", "rate.limited", { merchantId, window: "10m", count: recent.length + 1 }, now);
+      throw new RateLimited(`Rate limited: ${recent.length} messages from this merchant in the last 10 minutes`);
+    }
+    const injection = triage(text, merchant.lang).injection;
+    log.push({ at: now, injection });
+    this.inboundLog.set(merchantId, log);
+    if (injection && log.filter((x) => x.injection).length >= 2) {
+      flag("REPEATED_PROMPT_INJECTION", "high", "Repeated attempts to instruct the agent from this account");
+    }
+  }
+
+  /** Money actions actually executed for a merchant in the last 24 simulated hours (policy P12). */
+  moneyActionsToday(merchantId: string) {
+    const since = this.world.now() - 24 * HOUR;
+    let n = 0;
+    for (const c of this.cases.values()) {
+      if (c.merchantId !== merchantId) continue;
+      n += c.actions.filter((a) => a.verdict === "ALLOW" && a.at >= since && MONEY_TOOLS.includes(a.tool)).length;
+    }
+    return n;
+  }
+
   decideApproval(approvalId: string, decision: "APPROVED" | "REJECTED", by = "ops-lead") {
     const a = this.approvals.get(approvalId);
     if (!a || a.status !== "PENDING") throw new Error("Approval not pending");
     const kase = this.cases.get(a.caseId)!;
+    if (!by || /^(agent|system|policy)/i.test(by)) throw new Error("Approvals must come from a named human");
+    if (decision === "APPROVED") {
+      // P13 — two-person rule: the same human can't count twice.
+      if (a.approvals.some((x) => x.by === by)) throw new Error(`Two-person rule: ${by} has already approved; a different approver must confirm`);
+      a.approvals.push({ by, at: this.world.now() });
+      this.audit.append(kase.id, `human:${by}`, "approval.signed", { approvalId, signatures: a.approvals.length, required: a.required }, this.world.now());
+      if (a.approvals.length < a.required) {
+        this.trace(kase, "CHECK", `Approval ${a.approvals.length} of ${a.required} · ${by}`, { level: "L2", detail: `Two-person rule (P13): waiting for a second, different approver` });
+        this.emitUpdate();
+        return a;
+      }
+    }
     a.status = decision;
     a.decidedAt = this.world.now();
     a.decidedBy = by;
     this.audit.append(kase.id, `human:${by}`, "approval.decided", { approvalId, decision, tool: a.tool, amount: a.amount }, this.world.now());
-    this.trace(kase, "CHECK", `Human ${decision.toLowerCase()} ${a.tool}`, { level: "L2", detail: `${by} · ${a.summary}` });
+    this.trace(kase, "CHECK", `Human ${decision.toLowerCase()} ${a.tool}`, { level: "L2", detail: `${decision === "APPROVED" ? a.approvals.map((x) => x.by).join(" + ") : by} · ${a.summary}` });
     this.enqueue(kase.id, async () => {
       let result: unknown = null;
       if (decision === "APPROVED") {
-        const r = await this.execute(kase, { id: a.toolUseId ?? a.id, name: a.tool, input: a.input }, { approved: true });
+        const r = await this.execute(kase, { id: a.toolUseId ?? a.id, name: a.tool, input: a.input }, { approved: true, approvers: a.approvals.map((x) => x.by) });
         result = r.output;
       }
       kase.status = "IN_PROGRESS";
@@ -246,15 +317,20 @@ export class Runtime extends EventEmitter {
       if (TERMINAL.has(kase.status)) return;
       this.world.advance(2000);
       let t;
+      let brainMs = 0;
       try {
         if (this.config.chaosModelOutage) throw new ModelOutage(["chaos switch: simulated outage on Groq and Gemini"]);
+        const t0 = performance.now();
         t = await brain.next();
+        brainMs = performance.now() - t0;
       } catch (e) {
         this.failSafe(kase, e as Error);
         return;
       }
       kase.steps++;
-      if (t.thought) this.trace(kase, "PLAN", t.thought, { detail: `by ${t.by}` });
+      kase.timing.computeMs += brainMs;
+      this.brainMs.push(brainMs);
+      if (t.thought) this.trace(kase, "PLAN", t.thought, { detail: `by ${t.by}`, ms: brainMs });
       await this.pace();
 
       if (!t.calls.length) {
@@ -293,7 +369,7 @@ export class Runtime extends EventEmitter {
     }
   }
 
-  private async execute(kase: Case, call: ToolCall, opts: { approved?: boolean } = {}): Promise<ToolResult> {
+  private async execute(kase: Case, call: ToolCall, opts: { approved?: boolean; approvers?: string[] } = {}): Promise<ToolResult> {
     this.world.advance(1000);
     const vault = this.vaults.get(kase.id)!;
     const tool = TOOL_MAP.get(call.name);
@@ -302,7 +378,11 @@ export class Runtime extends EventEmitter {
 
     const input = revealDeep(call.input, vault);
     const ctx: ToolCtx = { rt: this, kase, vault };
+    const p0 = performance.now();
     const decision = evaluate(tool, input, ctx, this.policy, opts);
+    const policyMs = performance.now() - p0;
+    kase.timing.computeMs += policyMs;
+    if (tool.kind === "act" && kase.timing.firstActionMs === undefined) kase.timing.firstActionMs = kase.timing.computeMs;
     this.bumpLevel(kase, decision.level);
 
     if (tool.kind !== "read") {
@@ -311,6 +391,7 @@ export class Runtime extends EventEmitter {
         input: vault.redactValue(input),
         decision,
         level: decision.level,
+        ms: policyMs,
       });
       this.audit.append(kase.id, "policy", "policy.decision", { tool: tool.name, decision }, this.world.now());
     }
@@ -327,14 +408,18 @@ export class Runtime extends EventEmitter {
         return { call, output: { escalated_by_policy: decision.rules, reasons: decision.reasons }, isError: false };
       case "NEEDS_APPROVAL": {
         record();
+        const amount = tool.amount?.(input, ctx);
+        const required = (amount ?? 0) > this.policy.twoPersonAbove ? 2 : 1;
         const a: Approval = {
           id: `APR-${String(this.seq++).padStart(4, "0")}`,
           caseId: kase.id,
           tool: tool.name,
           input,
-          amount: tool.amount?.(input, ctx),
+          amount,
+          required,
+          approvals: [],
           summary: `${tool.name} ${JSON.stringify(vault.redactValue(input))}`,
-          rationale: decision.reasons.join("; "),
+          rationale: decision.reasons.join("; ") + (required > 1 ? `; above ₹${this.policy.twoPersonAbove.toLocaleString("en-IN")} so two different approvers are needed (P13)` : ""),
           status: "PENDING",
           createdAt: this.world.now(),
           toolUseId: call.id,
@@ -357,10 +442,17 @@ export class Runtime extends EventEmitter {
       }
     }
 
-    // ALLOW
+    // ALLOW: the policy engine signs a single-use capability bound to exactly this call.
+    if (tool.kind === "act") {
+      ctx.capability = this.caps.issue({ caseId: kase.id, tool: tool.name, input, level: decision.level, rules: decision.rules, approvers: opts.approvers });
+    }
     let raw: any;
+    const r0 = performance.now();
+    let toolMs = 0;
     try {
       raw = await tool.run(input, ctx);
+      toolMs = performance.now() - r0;
+      kase.timing.computeMs += toolMs;
     } catch (e) {
       const msg = (e as Error).message;
       if (tool.name === "close_case") this.trace(kase, "VERIFY", "Verification failed — case stays open", { detail: msg, tool: tool.name });
@@ -381,6 +473,7 @@ export class Runtime extends EventEmitter {
         input: vault.redactValue(input),
         output: shown,
         level: decision.level,
+        ms: toolMs,
       });
     }
     this.audit.append(kase.id, tool.kind === "read" ? "agent" : "agent", tool.kind === "read" ? "tool.read" : "tool.act", { tool: tool.name, input: vault.redactValue(input), output: shown }, this.world.now());
@@ -449,6 +542,7 @@ export class Runtime extends EventEmitter {
     }
     kase.status = "RESOLVED";
     kase.closedAt = this.world.now();
+    this.closeOut(kase);
     kase.summary = summary;
     kase.rootCause = rootCause;
     for (const w of this.activeWatchers(kase.id)) w.status = "CANCELLED";
@@ -473,12 +567,22 @@ export class Runtime extends EventEmitter {
     kase.status = "ESCALATED";
     kase.rootCause = i.rootCause;
     kase.closedAt = this.world.now();
+    this.closeOut(kase);
     this.bumpLevel(kase, "L3");
     for (const w of this.activeWatchers(kase.id)) w.status = "CANCELLED";
     this.trace(kase, "HANDOFF", `Escalated to ${i.severity === "high" ? "fraud desk" : "merchant ops"} with case file`, { level: "L3", output: file });
     this.audit.append(kase.id, "agent", "case.escalated", file, this.world.now());
     this.emitUpdate();
     return file;
+  }
+
+  /** Case leaves the agent: crypto-shred its PII vault and anchor the audit chain. */
+  private closeOut(kase: Case) {
+    if (this.vaults.get(kase.id)?.shred(this.world.now())) {
+      this.security.shredded++;
+      this.audit.append(kase.id, "security", "pii.shredded", { cipher: "AES-256-GCM", note: "per-case key destroyed" }, this.world.now());
+    }
+    this.anchors.anchorNow(this.audit);
   }
 
   private systemEscalate(kase: Case, reason: string, rootCause: string) {
@@ -615,6 +719,12 @@ export class Runtime extends EventEmitter {
 
   metrics() {
     const all = [...this.cases.values()];
+    const pct = (xs: number[], p: number) => {
+      if (!xs.length) return null;
+      const s = [...xs].sort((a, b) => a - b);
+      return Math.round(s[Math.min(s.length - 1, Math.floor((p / 100) * s.length))] * 10) / 10;
+    };
+    const first = all.map((c) => c.timing.firstActionMs).filter((x): x is number => x !== undefined);
     const resolved = all.filter((c) => c.status === "RESOLVED");
     const touchless = resolved.filter((c) => !c.actions.some((a) => a.level === "L2"));
     const ttr = resolved.map((c) => (c.closedAt! - c.openedAt) / MIN).sort((a, b) => a - b);
@@ -631,6 +741,18 @@ export class Runtime extends EventEmitter {
       medianMinutesToResolve: ttr.length ? ttr[Math.floor(ttr.length / 2)] : null,
       missedDisputeDeadlines: disputes.filter((c) => [...this.world.disputes.values()].some((d) => d.merchantId === c.merchantId && d.status === "OPEN" && this.world.now() > d.deadline)).length,
       proactiveUpdatesSent: this.messages.filter((m) => m.from === "agent").length,
+      latency: {
+        firstActionP50: pct(first, 50),
+        firstActionP95: pct(first, 95),
+        modelCallP50: pct(this.brainMs, 50),
+        modelCallP95: pct(this.brainMs, 95),
+      },
+      security: {
+        ...this.security,
+        capabilitiesIssued: this.caps.issued,
+        capabilitiesRejected: this.caps.rejected,
+        anchors: this.anchors.anchors.length,
+      },
       csat: (() => {
         const r = all.filter((c) => c.csat).map((c) => c.csat!);
         return r.length ? Math.round((r.reduce((a, b) => a + b, 0) / r.length) * 10) / 10 : null;
@@ -646,7 +768,7 @@ export class Runtime extends EventEmitter {
       brain: this.brainKind(),
       providers: configuredProviders().map((p) => p.name),
       policy: this.policy,
-      cases: [...this.cases.values()].sort((a, b) => b.openedAt - a.openedAt),
+      cases: [...this.cases.values()].sort((a, b) => b.openedAt - a.openedAt).map((c) => this.withPii(c)),
       approvals: [...this.approvals.values()],
       watchers: [...this.watchers.values()],
       messages: this.messages,
@@ -657,11 +779,16 @@ export class Runtime extends EventEmitter {
     };
   }
 
+  private withPii(c: Case): Case {
+    const v = this.vaults.get(c.id);
+    return v ? { ...c, pii: v.stats() } : c;
+  }
+
   caseDetail(id: string) {
     const kase = this.cases.get(id);
     if (!kase) return null;
     return {
-      case: kase,
+      case: this.withPii(kase),
       trace: this.traces.get(id) ?? [],
       messages: this.messages.filter((m) => m.caseId === id),
       approvals: [...this.approvals.values()].filter((a) => a.caseId === id),

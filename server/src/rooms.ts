@@ -28,6 +28,7 @@ export const cleanRoomId = (raw: unknown) => {
 
 function makeRuntime(room: Room, keep?: Runtime["config"]) {
   const rt = new Runtime({
+    label: room.id,
     pacingMs: Number(process.env.PACING_MS ?? 450),
     brain: (keep?.brain ?? (process.env.BRAIN as Runtime["config"]["brain"])) || "auto",
     shadow: keep?.shadow ?? false,

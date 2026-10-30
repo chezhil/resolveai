@@ -1,5 +1,6 @@
 import { useState } from "react";
 import type { Meta, Snapshot } from "../lib/api";
+import { fmtMs } from "../lib/api";
 import { Pill, SectionLabel, cx } from "../components/ui";
 
 const inr = (n: number) => {
@@ -63,6 +64,20 @@ export function Impact({ snap, meta }: { snap: Snapshot; meta: Meta | null }) {
             </div>
           ))}
         </div>
+        <div className="card p-4">
+          <SectionLabel>Security posture · this session</SectionLabel>
+          <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
+            <Tile tone="bg-mint" big={String(m.security.capabilitiesIssued)} label="signed capabilities issued" />
+            <Tile tone="bg-ember" big={String(m.security.capabilitiesRejected)} label="unsigned / replayed calls refused" />
+            <Tile tone="bg-sky" big={String(m.security.anchors)} label="audit anchors published" />
+            <Tile tone="bg-white" big={String(m.security.shredded)} label="PII vaults shredded at close" />
+            <Tile tone="bg-rose" big={String(m.security.rateLimited)} label="messages rate-limited" />
+            <Tile tone="bg-sun" big={String(m.security.anomalies)} label="anomaly flags raised" />
+          </div>
+          <div className="mt-2 text-[12px] text-muted">
+            Speed: first action p50 {fmtMsLocal(m.latency.firstActionP50)} · p95 {fmtMsLocal(m.latency.firstActionP95)} · model call p50 {fmtMsLocal(m.latency.modelCallP50)} (compute only, excluding demo pacing)
+          </div>
+        </div>
         {meta && (
           <div className="card p-4">
             <SectionLabel>Policy rules enforced in code</SectionLabel>
@@ -79,6 +94,7 @@ export function Impact({ snap, meta }: { snap: Snapshot; meta: Meta | null }) {
   );
 }
 
+const fmtMsLocal = (ms: number | null) => fmtMs(ms);
 const fmtMin = (m: number) => (m < 60 ? `${Math.round(m)}m` : m < 1440 ? `${(m / 60).toFixed(1)}h` : `${(m / 1440).toFixed(1)}d`);
 
 function Tile({ big, label, tone }: { big: string; label: string; tone: string }) {

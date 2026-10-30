@@ -31,6 +31,8 @@ export interface TraceEvent {
   input?: unknown;
   output?: unknown;
   decision?: PolicyDecision;
+  /** Compute time for this step (model call, policy check or tool), excluding demo pacing. */
+  ms?: number;
 }
 
 export interface PolicyDecision {
@@ -57,6 +59,9 @@ export interface Approval {
   summary: string;
   rationale: string;
   status: "PENDING" | "APPROVED" | "REJECTED";
+  /** Distinct human approvers needed (two-person rule above the threshold). */
+  required: number;
+  approvals: { by: string; at: number }[];
   createdAt: number;
   decidedAt?: number;
   decidedBy?: string;
@@ -115,4 +120,7 @@ export interface Case {
   shadow: boolean;
   steps: number;
   csat?: number;
+  /** Compute time spent on the case, and how long until the first action was proposed. */
+  timing: { computeMs: number; firstActionMs?: number };
+  pii?: { items: number; cipher: string; shredded: boolean };
 }

@@ -13,6 +13,8 @@ export interface ToolCtx {
   rt: Runtime;
   kase: Case;
   vault: PiiVault;
+  /** Signed, single-use capability minted by the policy engine for this exact call. */
+  capability?: string;
 }
 
 export type ToolKind = "read" | "act" | "control";
@@ -50,7 +52,7 @@ function merchantOf(ctx: ToolCtx, id: string) {
 
 const maskAcct = (a: string) => `••••${a.slice(-4)}`;
 
-export const TOOLS: ToolDef[] = [
+const RAW_TOOLS: ToolDef[] = [
   // ------------------------------------------------------------------ reads (L0)
   {
     name: "lookup_merchant",
@@ -458,6 +460,19 @@ export const TOOLS: ToolDef[] = [
   },
 ];
 
+/** Every action tool sits behind the money rail: no valid capability, no execution. */
+function guard(t: ToolDef): ToolDef {
+  if (t.kind !== "act") return t;
+  return {
+    ...t,
+    run: (input, ctx) => {
+      ctx.rt.caps.verify(ctx.capability, { caseId: ctx.kase.id, tool: t.name, input });
+      return t.run(input, ctx);
+    },
+  };
+}
+
+export const TOOLS: ToolDef[] = RAW_TOOLS.map(guard);
 export const TOOL_MAP = new Map(TOOLS.map((t) => [t.name, t]));
 
 /** Tool definitions in the OpenAI-compatible format that both Groq and Gemini accept. */

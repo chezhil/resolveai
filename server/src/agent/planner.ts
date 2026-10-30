@@ -103,7 +103,8 @@ export class PlannerBrain implements Brain {
             : "Merchant says a customer paid but the soundbox stayed silent. Check the ledger first, not the device.",
           [
             this.call("lookup_merchant", { merchant_id: m }),
-            this.call("search_transactions", { merchant_id: m, since_minutes: 60, ...(tri?.amount ? { amount: tri.amount } : {}) }),
+            // Proactive cases may start after a clock jump, so don't limit them to the last hour.
+            this.call("search_transactions", { merchant_id: m, ...(this.kase.proactive ? {} : { since_minutes: 60 }), ...(tri?.amount ? { amount: tri.amount } : {}) }),
             this.call("search_sop", { query: "soundbox silent customer paid debited credit pending merchant" }),
           ],
         );

@@ -15,6 +15,10 @@ export interface PolicyConfig {
   l2Cap: number;
   nameMatchMin: number;
   maxActionsPerCase: number;
+  /** Approvals above this amount need two different humans. */
+  twoPersonAbove: number;
+  /** Money actions per merchant per 24h before velocity escalation. */
+  maxMoneyActionsPerDay: number;
   shadow: boolean;
 }
 
@@ -24,7 +28,20 @@ export const DEFAULT_POLICY: PolicyConfig = {
   l2Cap: 500000,
   nameMatchMin: 0.85,
   maxActionsPerCase: 10,
+  twoPersonAbove: 100000,
+  maxMoneyActionsPerDay: 5,
   shadow: false,
+};
+
+export const MONEY_TOOLS = ["raise_bank_ticket", "initiate_refund", "release_settlement_hold", "file_dispute_evidence", "update_payout_account"];
+
+/** P11: action tools each workflow may use. Read tools are always allowed. */
+export const WORKFLOW_TOOLS: Record<string, string[]> = {
+  failed_payment: ["raise_bank_ticket", "initiate_refund", "send_message"],
+  settlement_hold: ["release_settlement_hold", "send_message"],
+  dispute: ["file_dispute_evidence", "send_message"],
+  account_change: ["send_message"],
+  unknown: ["send_message"],
 };
 
 export const RULES: Record<string, string> = {
@@ -39,6 +56,9 @@ export const RULES: Record<string, string> = {
   P8: "Shadow mode: actions are recorded, not executed.",
   P9: "One refund per transaction; never refund what was already credited back.",
   P10: "If the customer's message tries to instruct the agent (prompt injection), every money action needs human approval.",
+  P11: "Least privilege: each workflow may only use the action tools it needs.",
+  P12: "Velocity: too many money actions for one merchant in 24 hours goes to a human.",
+  P13: "Two-person rule: approvals above ₹1,00,000 need two different humans; nobody approves twice.",
 };
 
 const decide = (verdict: PolicyDecision["verdict"], level: Level, rules: string[], reasons: string[]): PolicyDecision => ({
@@ -71,6 +91,16 @@ function evaluateRules(tool: ToolDef, input: any, ctx: ToolCtx, cfg: PolicyConfi
   // P1 — hard block, regardless of who asks or what the model thinks.
   if (tool.name === "update_payout_account") {
     return decide("BLOCK", "L3", ["P1"], ["Payout accounts are changed only via in-app re-KYC with video verification. Escalate to the fraud desk."]);
+  }
+
+  // P11 — least privilege: the workflow (set by deterministic triage, not the model) scopes the tools.
+  if (tool.kind === "act" && !(WORKFLOW_TOOLS[kase.workflow] ?? []).includes(tool.name)) {
+    return decide("BLOCK", "L1", ["P11"], [`${tool.name} is not permitted in a ${kase.workflow.replace("_", " ")} case`]);
+  }
+
+  // P12 — velocity across all of this merchant's cases.
+  if (MONEY_TOOLS.includes(tool.name) && rt.moneyActionsToday(kase.merchantId) >= cfg.maxMoneyActionsPerDay) {
+    return decide("ESCALATE", "L3", ["P12"], [`${cfg.maxMoneyActionsPerDay}+ money actions for this merchant in 24h`]);
   }
 
   // P5 — runaway protection.

@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import type { Meta } from "./lib/api";
-import { api } from "./lib/api";
+import { api, fmtMs } from "./lib/api";
 import { useLive } from "./lib/store";
 import { Console } from "./views/Console";
 import { Cases } from "./views/Cases";
@@ -144,9 +144,10 @@ function MetricsStrip({ snap }: { snap: import("./lib/api").Snapshot }) {
     ["Proactive", m.proactive, "bg-sky"],
     ["Missed deadlines", m.missedDisputeDeadlines, "bg-white"],
     ["Merchant CSAT", m.csat ? `${m.csat}★` : "—", "bg-white"],
+    ["First action p50 / p95", m.latency.firstActionP50 === null ? "—" : `${fmtMs(m.latency.firstActionP50)} / ${fmtMs(m.latency.firstActionP95)}`, "bg-sun"],
   ] as const;
   return (
-    <div className="mb-4 grid grid-cols-3 gap-2 sm:grid-cols-5 xl:grid-cols-9">
+    <div className="mb-4 grid grid-cols-2 gap-2 sm:grid-cols-5 xl:grid-cols-10">
       {items.map(([k, v, tone]) => (
         <div key={k} className={cx("rounded-xl border-2 border-ink px-3 py-1.5", tone)}>
           <div className="font-display text-xl font-extrabold leading-tight">{v}</div>

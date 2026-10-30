@@ -1,6 +1,6 @@
 import { useState } from "react";
 import type { Case, TraceEvent } from "../lib/api";
-import { fmtTPlus } from "../lib/api";
+import { fmtMs, fmtTPlus } from "../lib/api";
 import { Empty, Json, LevelBadge, Pill, StageChip, cx } from "./ui";
 
 const VERDICT_TONE = { ALLOW: "mint", SHADOW: "white", NEEDS_APPROVAL: "rose", BLOCK: "ember", ESCALATE: "ember" } as const;
@@ -45,6 +45,7 @@ function Row({ e }: { e: TraceEvent }) {
         <div className="flex items-start justify-between gap-2">
           <div className="min-w-0 text-[13.5px] font-semibold leading-snug">{e.title}</div>
           <div className="flex shrink-0 items-center gap-1">
+            {e.ms !== undefined && <span className="font-mono text-[10px] text-muted" title="Compute time for this step (excludes demo pacing)">⚡{fmtMs(e.ms)}</span>}
             {e.decision && <Pill tone={VERDICT_TONE[e.decision.verdict]}>{e.decision.verdict.replace("_", " ")}</Pill>}
             <LevelBadge level={e.level} />
           </div>

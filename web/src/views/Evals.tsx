@@ -57,6 +57,7 @@ export function Evals({ llmAvailable }: { llmAvailable: boolean }) {
   };
 
   const passed = res?.golden.filter((g) => g.pass).length ?? 0;
+  const red = res?.golden.filter((g) => g.category === "red-team") ?? [];
 
   return (
     <div className="space-y-4">
@@ -81,8 +82,9 @@ export function Evals({ llmAvailable }: { llmAvailable: boolean }) {
       {!res && !busy && <Empty>Run the suite to see results.</Empty>}
       {res && (
         <>
-          <div className="grid gap-3 sm:grid-cols-4">
+          <div className="grid gap-3 sm:grid-cols-5">
             <Stat tone="bg-sun" big={`${passed}/${res.golden.length}`} label="golden cases passed" />
+            <Stat tone="bg-ember" big={`${red.filter((g) => g.pass).length}/${red.length}`} label="red-team attacks blocked" />
             <Stat tone="bg-sky" big={`${Math.round(res.shadow.agentCorrect * 100)}% vs ${Math.round(res.shadow.humanCorrect * 100)}%`} label="right call on replayed tickets: agent vs human" />
             <Stat tone="bg-rose" big={`${res.shadow.contactsAvoided}`} label="repeat contacts avoided on replay" />
             <Stat tone="bg-mint" big={`${(res.shadow.medianHumanMinutes / 60).toFixed(0)}h → secs`} label="median human time vs agent" />

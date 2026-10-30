@@ -9,8 +9,8 @@ import { detectLang } from "../src/sim/lang.js";
 import { triage } from "../src/agent/triage.js";
 import { runGolden } from "../src/evals/golden.js";
 
-function ctxFor(rt: Runtime, merchantId: string) {
-  const kase = rt.inbound(merchantId, "test", "whatsapp");
+function ctxFor(rt: Runtime, merchantId: string, text = "test") {
+  const kase = rt.inbound(merchantId, text, "whatsapp");
   return { rt, kase, vault: new PiiVault(new Set([...rt.world.txns.values()].map((t) => t.rrn))) };
 }
 
@@ -51,19 +51,19 @@ describe("Policy engine", () => {
     expect(d.rules).toContain("P1");
   });
   it("refuses ungrounded bank tickets (P3)", () => {
-    const ctx = ctxFor(rt, "M1001");
+    const ctx = ctxFor(rt, "M1001", "customer paid but soundbox silent");
     const d = evaluate(TOOL_MAP.get("raise_bank_ticket")!, { rrn: "630412345678", kind: "PUSH_CREDIT" }, ctx, rt.policy);
     expect(d.verdict).toBe("BLOCK");
     expect(d.rules).toContain("P3");
   });
   it("forces L3 when the merchant has a high-severity risk flag (P2)", () => {
-    const ctx = ctxFor(rt, "M1004");
+    const ctx = ctxFor(rt, "M1004", "my settlement is on hold");
     const d = evaluate(TOOL_MAP.get("release_settlement_hold")!, { batch_id: "STL-88250", justification: "x" }, ctx, rt.policy);
     expect(d).toMatchObject({ verdict: "ESCALATE", level: "L3" });
   });
   it("tiers refunds: L1 under the cap, L2 approval above it", () => {
     const r = new Runtime();
-    const ctx = ctxFor(r, "M1003");
+    const ctx = ctxFor(r, "M1003", "customer was debited but I didn't get the payment");
     ctx.kase.facts["txn:630098765432"] = { key: "txn:630098765432", value: {}, source: "search_transactions", at: 0 };
     const small = evaluate(TOOL_MAP.get("initiate_refund")!, { txn_id: "TXN-12499", amount: 500, reason: "x" }, ctx, r.policy);
     const big = evaluate(TOOL_MAP.get("initiate_refund")!, { txn_id: "TXN-12499", amount: 9000, reason: "x" }, ctx, r.policy);

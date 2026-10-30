@@ -25,6 +25,7 @@ export interface TraceEvent {
   input?: unknown;
   output?: unknown;
   decision?: PolicyDecision;
+  ms?: number;
 }
 
 export interface Fact {
@@ -65,6 +66,8 @@ export interface Case {
   shadow: boolean;
   steps: number;
   csat?: number;
+  timing: { computeMs: number; firstActionMs?: number };
+  pii?: { items: number; cipher: string; shredded: boolean };
 }
 
 export interface Approval {
@@ -76,6 +79,8 @@ export interface Approval {
   summary: string;
   rationale: string;
   status: "PENDING" | "APPROVED" | "REJECTED";
+  required: number;
+  approvals: { by: string; at: number }[];
   createdAt: number;
   decidedAt?: number;
   decidedBy?: string;
@@ -132,6 +137,15 @@ export interface Metrics {
   missedDisputeDeadlines: number;
   proactiveUpdatesSent: number;
   csat: number | null;
+  latency: { firstActionP50: number | null; firstActionP95: number | null; modelCallP50: number | null; modelCallP95: number | null };
+  security: {
+    rateLimited: number;
+    anomalies: number;
+    shredded: number;
+    capabilitiesIssued: number;
+    capabilitiesRejected: number;
+    anchors: number;
+  };
 }
 
 export interface Snapshot {
@@ -221,3 +235,5 @@ export function fmtTPlus(s: number) {
 }
 
 export const rupees = (n: number) => `₹${n.toLocaleString("en-IN")}`;
+
+export const fmtMs = (ms?: number | null) => (ms == null ? "—" : ms < 1 ? `${Math.round(ms * 1000)} µs` : ms < 1000 ? `${ms.toFixed(ms < 10 ? 1 : 0)} ms` : `${(ms / 1000).toFixed(1)} s`);

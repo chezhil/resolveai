@@ -64,7 +64,14 @@ export async function handleInbound(req: Request, res: Response) {
     const t = await transcribe(Buffer.from(await audio.arrayBuffer()), params.MediaContentType0, lang);
     text = t.transcript;
   }
-  if (text) room.rt.inbound(MERCHANT, text.slice(0, 2000), "whatsapp");
+  if (text) {
+    try {
+      room.rt.inbound(MERCHANT, text.slice(0, 2000), "whatsapp");
+    } catch (e) {
+      await send(from, "We've received several messages from you; your case is already being worked on. We'll update you shortly.");
+      console.warn(`[whatsapp] ${(e as Error).message}`);
+    }
+  }
   res.type("text/xml").send("<Response></Response>");
 }
 

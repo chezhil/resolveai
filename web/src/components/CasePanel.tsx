@@ -1,5 +1,6 @@
+import { useState } from "react";
 import type { Approval, Case, Level, Watcher } from "../lib/api";
-import { api, fmtTime, rupees } from "../lib/api";
+import { api, fmtMs, fmtTime, rupees } from "../lib/api";
 import { Button, Empty, LEVEL_NAME, Pill, SectionLabel, StatusBadge, cx } from "./ui";
 
 const LEVELS: Level[] = ["L0", "L1", "L2", "L3"];
@@ -31,6 +32,10 @@ export function CasePanel({ kase, approvals, watchers }: { kase?: Case; approval
           {kase.shadow && <Pill>Shadow</Pill>}
           <Pill>{kase.lang === "kn" ? "Kannada" : kase.lang === "hi" ? "Hindi" : "English"}</Pill>
           <Pill>{kase.brain === "llm" ? "Groq/Gemini" : "Planner"}</Pill>
+          {kase.pii && kase.pii.items > 0 && (
+            <Pill tone={kase.pii.shredded ? "white" : "sky"}>{kase.pii.shredded ? `🔒 ${kase.pii.items} PII · shredded` : `🔒 ${kase.pii.items} PII · ${kase.pii.cipher}`}</Pill>
+          )}
+          {kase.timing.firstActionMs !== undefined && <Pill tone="sun">⚡ first action {fmtMs(kase.timing.firstActionMs)}</Pill>}
         </div>
         <div className="mt-3 grid grid-cols-4 gap-1">
           {LEVELS.map((l) => (
@@ -128,23 +133,46 @@ export function CasePanel({ kase, approvals, watchers }: { kase?: Case; approval
   );
 }
 
+const APPROVERS = [
+  { id: "ops-lead", label: "Ops lead" },
+  { id: "risk-lead", label: "Risk lead" },
+];
+
 export function ApprovalCard({ a }: { a: Approval }) {
+  const [err, setErr] = useState("");
+  const act = (decision: "APPROVED" | "REJECTED", by: string) => api(`/approvals/${a.id}`, { decision, by }).catch((e) => setErr((e as Error).message));
+  const signed = new Set(a.approvals.map((x) => x.by));
   return (
     <div className="card rise bg-rose/30 p-3">
-      <SectionLabel right={<Pill tone="rose">L2</Pill>}>One-click approval · {a.id}</SectionLabel>
+      <SectionLabel right={<Pill tone="rose">L2{a.required > 1 ? " · two-person" : ""}</Pill>}>One-click approval · {a.id}</SectionLabel>
       <div className="font-display text-lg font-extrabold">
         {a.tool.replaceAll("_", " ")} {a.amount ? rupees(a.amount) : ""}
       </div>
       <div className="mt-1 text-[12.5px] text-muted">{a.rationale}</div>
       <div className="mt-1 break-all font-mono text-[11px]">{JSON.stringify(a.input)}</div>
-      <div className="mt-2.5 flex gap-2">
-        <Button tone="mint" onClick={() => api(`/approvals/${a.id}`, { decision: "APPROVED", by: "ops-lead" })}>
-          Approve
-        </Button>
-        <Button tone="white" onClick={() => api(`/approvals/${a.id}`, { decision: "REJECTED", by: "ops-lead" })}>
+      {a.required > 1 && (
+        <div className="mt-2 flex items-center gap-2 text-[12px]">
+          <span className="font-semibold">
+            Signatures {a.approvals.length}/{a.required}
+          </span>
+          {a.approvals.map((x) => (
+            <Pill key={x.by} tone="mint">
+              ✓ {x.by}
+            </Pill>
+          ))}
+        </div>
+      )}
+      <div className="mt-2.5 flex flex-wrap gap-2">
+        {(a.required > 1 ? APPROVERS : APPROVERS.slice(0, 1)).map((p) => (
+          <Button key={p.id} tone="mint" disabled={signed.has(p.id)} onClick={() => act("APPROVED", p.id)}>
+            {a.required > 1 ? `Approve as ${p.label}` : "Approve"}
+          </Button>
+        ))}
+        <Button tone="white" onClick={() => act("REJECTED", "ops-lead")}>
           Reject
         </Button>
       </div>
+      {err && <div className="mt-2 text-[12px] text-ember">{err}</div>}
     </div>
   );
 }

@@ -71,7 +71,8 @@ const shot = (page, name, opts = {}) => page.screenshot({ path: `${OUT}${name}.p
 {
   const page = await open("cap-b");
   await scenario(page, "Priya");
-  await page.getByRole("button", { name: "Approve" }).first().waitFor({ timeout: 20000 });
+  await page.getByRole("button", { name: "Approve as Ops lead" }).waitFor({ timeout: 20000 });
+  await page.getByRole("button", { name: "Approve as Ops lead" }).click();
   await sleep(600);
   await shot(page, "03-l2-approval");
   await page.close();
@@ -104,8 +105,8 @@ const shot = (page, name, opts = {}) => page.screenshot({ path: `${OUT}${name}.p
   await scenario(page, "Arjun");
   await page.getByText("Verified & closed").first().waitFor({ timeout: 20000 });
   await page.getByRole("button", { name: "Audit log" }).click();
-  await page.getByRole("button", { name: "Tamper demo" }).click();
-  await page.getByText(/broken at/).waitFor();
+  await page.getByRole("button", { name: "Tamper: rewrite chain" }).click();
+  await page.getByText(/contradicted/).waitFor();
   await sleep(400);
   await shot(page, "06-audit-tamper");
   await page.close();

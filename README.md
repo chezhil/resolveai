@@ -42,7 +42,7 @@ ResolveAI owns the case from **first signal to confirmed closure**:
 | ![L2 approval](docs/media/03-l2-approval.png) | ![Guardrail escalation](docs/media/04-guardrail-escalation.png) |
 | **L2:** penny-drop clears the blocker, then one-click human approval | **L3:** PII redacted, payout change blocked by policy, fraud desk gets the case file |
 | ![Evals](docs/media/05-evals.png) | ![Audit tamper](docs/media/06-audit-tamper.png) |
-| **16/16 golden cases** + shadow replay against human decisions | **Hash-chained audit log:** editing one entry breaks the chain |
+| **28/28 golden cases, incl. 11 red-team attacks** + shadow replay against human decisions | **Anchored audit log:** even a full re-hash of the chain contradicts the published anchors |
 
 ## Run it
 
@@ -82,12 +82,12 @@ Every visitor gets an **isolated room**: their own simulated world, cases and au
 The full script is in [docs/DEMO.md](docs/DEMO.md).
 
 1. **A · Manjunath's ₹480** (Kannada voice note). Watch Hear → Plan → Check → Act: ledger match, Paytm PG order status (`PENDING / 402`), bank and UDIR checks, an L1 push-credit ticket, a reply in Kannada with the **exact** time, and the payer is told not to pay twice. Click **+1 day**: the watcher fires, the agent re-reads the bank, the soundbox announces *"₹480 received"*, the verifier closes the case, and the merchant taps a ★ rating.
-2. **B · Priya's ₹1.84 L settlement** (Hinglish). Penny-drop verification clears a name-mismatch hold, and the release lands in the **L2 approval queue**. Approve, then jump the clock; the case closes only when a UTR exists.
+2. **B · Priya's ₹1.84 L settlement** (Hinglish). Penny-drop verification clears a name-mismatch hold, and the release lands in the **L2 approval queue**. Above ₹1 L it needs **two different approvers** (Ops lead + Risk lead). Approve both, then jump the clock; the case closes only when a UTR exists.
 3. **C · Arjun's chargeback.** Five evidence items (QR scan, PIN auth, soundbox log, invoice, geo) are filed a day before the deadline, with an NPCI ack.
 4. **D · "Change my payout account, urgent."** PII is redacted before the model sees it (`<ACCOUNT_1>`, `<PHONE_1>`). Policy **P1 blocks** the change, the SIM-swap risk flag forces L3, and the fraud desk gets a complete case file.
 5. **E · Proactive.** A stuck ₹2,350 payment is detected on the event stream after 10 minutes, and the merchant hears from us before they complain.
 6. Toggle **Model outage**, then run any scenario: the case fails safe to the human queue with no half-finished actions.
-7. **Evals & shadow** tab: 16/16 golden cases and the shadow replay. **Audit log** tab: hit **Tamper demo** and watch the hash chain break.
+7. **Evals & shadow** tab: 28/28 golden cases, including 11 red-team attacks, plus the shadow replay. **Audit log** tab: **Tamper: rewrite chain** re-hashes the whole chain so it still "verifies", and the published anchors catch it anyway.
 
 ## Architecture
 
@@ -123,7 +123,7 @@ flowchart LR
 |---|---|
 | **1 · Hear**: WhatsApp, in-app, IVR, soundbox; Sarvam ASR; PII redaction | [`channels/whatsapp.ts`](server/src/channels/whatsapp.ts) (Twilio webhook with signature verification; voice notes transcribed by Sarvam), [`agent/triage.ts`](server/src/agent/triage.ts) (Kannada / Hindi / English, romanised too; injection detection), [`core/pii.ts`](server/src/core/pii.ts) (tokenises phone, VPA, PAN, Aadhaar, card and account numbers per case), [`voice/sarvam.ts`](server/src/voice/sarvam.ts) |
 | **2 · Plan**: LLM with tool use, RAG on SOPs and NPCI/RBI rules | [`agent/llm.ts`](server/src/agent/llm.ts) (Groq → Gemini over OpenAI-compatible tool calling), [`sim/kb.ts`](server/src/sim/kb.ts) (BM25 over RBI TAT, NPCI UDIR/chargeback rules, SOPs) |
-| **3 · Check**: deterministic policy engine | [`policy/engine.ts`](server/src/policy/engine.ts): rules P0–P10, tier limits, grounding checks |
+| **3 · Check**: deterministic policy engine | [`policy/engine.ts`](server/src/policy/engine.ts): rules P0–P13, tier limits, grounding checks, least privilege, velocity, two-person rule; signed capabilities in [`core/capability.ts`](server/src/core/capability.ts) |
 | **4 · Act**: MCP-style tools | [`tools/registry.ts`](server/src/tools/registry.ts): 21 tools (12 read, 6 act, 3 control) with JSON schemas, including [`integrations/paytm.ts`](server/src/integrations/paytm.ts), shaped like Paytm PG's Transaction Status API |
 | **5 · Verify**: re-reads state, Sarvam TTS reply | `verifyAndClose` in [`core/runtime.ts`](server/src/core/runtime.ts) plus watchers; soundbox announcement on credit; ▶ listen on every reply (Sarvam TTS or browser voice) |
 | **The spine**: event stream, case memory, approval queue, audit log | [`core/runtime.ts`](server/src/core/runtime.ts), [`core/audit.ts`](server/src/core/audit.ts) (SHA-256 hash chain), [`core/archive.ts`](server/src/core/archive.ts) (SQLite), [`rooms.ts`](server/src/rooms.ts) |
@@ -139,15 +139,20 @@ The brain is swappable because nothing it says is trusted: facts come only from 
 
 ## Trust & safety: every guardrail is code
 
-| Risk | Guardrail | Where / proof |
+The model is treated as untrusted. Seven independent layers sit between what it proposes and money moving, and **11 red-team attacks** run on every push.
+
+| Layer | What it does | Where / proof |
 |---|---|---|
-| 1 · Wrong money action | L1 covers only low-value, reversible actions; bigger ones wait in the approval queue | P4 `tier()`; G03, G04 |
-| 2 · Hallucinated diagnosis | No action without **tool-confirmed facts**; the verifier checks the ledger, not the model's claim | P3 + `verifyAndClose`; G02, G09 |
-| 3 · Fraud or social engineering | Risk flags force L3; never acts on a user's word alone; never changes payout accounts | P1, P2; G06 |
-| 3b · Prompt injection | Customer text is quoted as untrusted data; real runtime events carry a per-case nonce; injection attempts remove L1 autonomy (P10); only the human queue can approve | `quoteUntrusted`, P10; G14 (direct), G15 (indirect, via a UPI remark in a tool result), G16 (forged approval) |
-| 4 · Customer data exposure | PII redacted before the model sees it; outbound messages scanned for leaks; full audit trail | `PiiVault`, P6, `AuditLog` |
-| 5 · Missed regulatory TAT | Deadline watchers on every case; escalate with the case file before the window closes | `checkWatchers()`, P7 |
-| 6 · Model or tool outage | Fails safe to the human queue with the case file; no half-finished actions | `failSafe()`; G12 |
+| **Signed capabilities** | When policy allows an action, it mints a single-use, 60-second HMAC token bound to the exact tool, arguments, case and approvers. Action tools refuse to run without one. A forged, replayed or edited call can't move money even if the model is compromised. | [`core/capability.ts`](server/src/core/capability.ts); R01–R03 |
+| **Deterministic policy, L0–L3** | 14 rules (P0–P13): grounding in tool facts (P3), value tiers (P4), never change payouts (P1), risk flags force L3 (P2), injection removes L1 autonomy (P10), **least privilege per workflow (P11)**, **24h velocity limit (P12)** | [`policy/engine.ts`](server/src/policy/engine.ts); G02–G09, R07, R08 |
+| **Two-person rule** | Above ₹1,00,000 an approval needs two *different* humans; the agent can never approve | P13 in `decideApproval`; G03, R04 |
+| **Prompt-injection defence** | Customer text quoted as untrusted data; runtime events carry a per-case nonce; injection attempts are flagged and repeated ones mark the account high-risk | `quoteUntrusted`, `screenInbound`; G14–G16, R06 |
+| **Rate limiting & anomaly flags** | Per-merchant message limits (8 per 10 min) with `INBOUND_FLOOD` flagging, plus per-IP API limits on the public deploy | `screenInbound`, `limiter()`; R05 |
+| **Encrypted, shredded PII** | Phone, VPA, PAN, Aadhaar, card and account numbers are tokenised before the model sees them, held only as AES-256-GCM ciphertext with an HMAC index, and **crypto-shredded when the case closes**. Outbound messages are scanned for leaks. | [`core/pii.ts`](server/src/core/pii.ts); R10, R11 |
+| **Anchored audit log** | SHA-256 hash chain; the head is HMAC-signed and published every 10 entries and at every close (file sink, plus a GitHub Gist with `GITHUB_TOKEN` + `ANCHOR_GIST_ID`). A full consistent rewrite still contradicts the anchors. | [`core/audit.ts`](server/src/core/audit.ts), [`core/anchor.ts`](server/src/core/anchor.ts); G13, R09 |
+| **Fail-safe** | Model or tool outage → human queue with the case file, no half-finished actions | `failSafe()`; G12 |
+
+**Fast:** every step in the trace shows its compute time (⚡), and the dashboard reports p50/p95 time to the first action. With the offline planner the agent proposes its first action in **about 1–7 ms of compute**; with Groq the model call dominates and is shown per step. The demo's step-by-step animation is deliberate pacing and is excluded from these numbers.
 
 ## Evals
 
@@ -159,7 +164,7 @@ npm test
 npm run eval
 ```
 
-- **16 golden cases** (workflows, guardrails, prompt injection, proactive, resilience). Each one runs in a fresh, isolated simulated world and asserts on the **systems of record** (ledger credited, settlement UTR, dispute ack, payout account unchanged), not on the agent's text.
+- **28 golden cases** (workflows, guardrails, prompt injection, proactive, resilience, and 11 red-team attacks). Each one runs in a fresh, isolated simulated world and asserts on the **systems of record** (ledger credited, settlement UTR, dispute ack, payout account unchanged), not on the agent's text.
 - **Shadow replay** runs the agent with actions recorded but not executed on 14 historical tickets, scored against the action an ops reviewer marked as the right call. Current result: the **agent makes the right call on 93%, the human agents on 79%**, and the two agree on 79%. Six tickets are deliberately hard: an account takeover a human fell for, a refund that should have been a push credit, a ticket raised for a payment that didn't exist. The one miss is a **known gap**: there's no duplicate-debit workflow yet, so the agent escalates safely instead of refunding. The tickets are synthetic stand-ins for the anonymised set we'd request from Paytm.
 - `npm run eval -- --llm` runs the same golden cases against Groq/Gemini.
 - CI ([.github/workflows/ci.yml](.github/workflows/ci.yml)) typechecks and runs tests and evals on every push.
@@ -187,9 +192,9 @@ Illustrative unit economics: 10,00,000 tickets/month × 60% × (₹45 − ₹4) 
 server/src
   agent/         triage (HEAR), brain contract, LLM brain (Groq→Gemini), offline planner
   channels/      WhatsApp via Twilio
-  core/          runtime loop, types, PII vault, audit log, SQLite archive
+  core/          runtime loop, types, encrypted PII vault, signed capabilities, audit log + anchors, SQLite archive
   integrations/  Paytm PG transaction-status adapter
-  policy/        deterministic policy engine (L0–L3, rules P0–P10)
+  policy/        deterministic policy engine (L0–L3, rules P0–P13)
   tools/         MCP-style tool registry
   sim/           simulated Paytm systems, knowledge base, languages, demo scenarios
   evals/         golden cases, shadow replay, CLI

@@ -17,6 +17,7 @@ import { configuredProviders } from "./agent/llm.js";
 import { sarvamEnabled, speak, transcribe } from "./voice/sarvam.js";
 import { cleanRoomId, getRoom, onAgentMessage, resetRoom, roomCount, type Room } from "./rooms.js";
 import { archive } from "./core/archive.js";
+import { RateLimited } from "./core/runtime.js";
 import { WHATSAPP_ROOM, handleInbound, outbound, whatsappEnabled } from "./channels/whatsapp.js";
 
 // In dev the console proxies /api to :8787 (PORT may belong to Vite); in production one process serves both on PORT.
@@ -36,9 +37,34 @@ const wrap = (fn: (req: express.Request, room: Room) => unknown) => async (req: 
     const out = await fn(req, roomOf(req));
     if (!res.headersSent) res.json(out ?? { ok: true });
   } catch (e) {
-    res.status(400).json({ error: (e as Error).message });
+    res.status(e instanceof RateLimited ? 429 : 400).json({ error: (e as Error).message });
   }
 };
+
+// Per-IP token bucket for the public deploy: writes are capped, evals more tightly.
+const buckets = new Map<string, { tokens: number; at: number }>();
+function limiter(perMinute: number, scope: string): express.RequestHandler {
+  return (req, res, next) => {
+    const key = `${scope}:${req.ip}`;
+    const now = Date.now();
+    const b = buckets.get(key) ?? { tokens: perMinute, at: now };
+    b.tokens = Math.min(perMinute, b.tokens + ((now - b.at) / 60_000) * perMinute);
+    b.at = now;
+    if (b.tokens < 1) {
+      res.set("Retry-After", "10").status(429).json({ error: "Too many requests; slow down" });
+      return;
+    }
+    b.tokens -= 1;
+    buckets.set(key, b);
+    next();
+  };
+}
+setInterval(() => {
+  const cutoff = Date.now() - 10 * 60_000;
+  for (const [k, b] of buckets) if (b.at < cutoff) buckets.delete(k);
+}, 60_000).unref();
+app.post("/api/evals/run", limiter(6, "evals"));
+app.post(/^\/api\/(?!channels).*/, limiter(Number(process.env.WRITE_RATE_PER_MIN ?? 120), "write"));
 
 // Evals spin up many worlds; keep one run at a time per process.
 let evalRun: Promise<unknown> | null = null;
@@ -109,9 +135,19 @@ app.post("/api/events/stuck-payment", wrap((q, { rt }) => {
   return { txnId: t.txnId, rrn: t.rrn };
 }));
 
-app.get("/api/audit", wrap((_q, { rt }) => ({ entries: rt.audit.list(), verify: rt.audit.verify() })));
-app.post("/api/audit/verify", wrap((_q, { rt }) => rt.audit.verify()));
-app.post("/api/audit/tamper", wrap((q, { rt }) => ({ tampered: rt.audit.tamper(Number(q.body?.seq ?? 2)), verify: rt.audit.verify() })));
+const auditView = (rt: Room["rt"]) => ({ entries: rt.audit.list(), verify: rt.audit.verify(), anchors: rt.anchors.anchors, anchorCheck: rt.anchors.check(rt.audit) });
+app.get("/api/audit", wrap((_q, { rt }) => auditView(rt)));
+app.post("/api/audit/verify", wrap((_q, { rt }) => auditView(rt)));
+app.post("/api/audit/anchor", wrap((_q, { rt }) => {
+  rt.anchors.anchorNow(rt.audit);
+  return auditView(rt);
+}));
+app.post("/api/audit/tamper", wrap((q, { rt }) => {
+  // "naive" edits one entry; "rewrite" re-hashes the rest of the chain so only the anchors catch it.
+  if (q.body?.mode === "rewrite") rt.audit.rewriteConsistently(Number(q.body?.seq ?? 2));
+  else rt.audit.tamper(Number(q.body?.seq ?? 2));
+  return auditView(rt);
+}));
 app.get("/api/archive", wrap(async () => {
   await archive.ready;
   return archive.recent(Number(process.env.ARCHIVE_LIMIT ?? 50));

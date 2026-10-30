@@ -35,6 +35,29 @@ export class AuditLog {
     return entry;
   }
 
+  get length() {
+    return this.entries.length;
+  }
+
+  head() {
+    return this.entries.at(-1);
+  }
+
+  /** Demo only: rewrite an entry AND recompute every later hash, so the chain verifies again.
+   * Only an external anchor can catch this. */
+  rewriteConsistently(seq: number) {
+    const e = this.entries[seq - 1];
+    if (!e) return false;
+    e.payload = { ...(e.payload as object), tampered: true };
+    for (let i = seq - 1; i < this.entries.length; i++) {
+      const cur = this.entries[i];
+      cur.prevHash = i === 0 ? GENESIS : this.entries[i - 1].hash;
+      const { hash: _old, ...rest } = cur;
+      cur.hash = digest(rest);
+    }
+    return true;
+  }
+
   list(caseId?: string) {
     return caseId ? this.entries.filter((e) => e.caseId === caseId) : [...this.entries];
   }
