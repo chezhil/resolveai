@@ -64,6 +64,7 @@ export interface Case {
   brain: "llm" | "planner";
   shadow: boolean;
   steps: number;
+  csat?: number;
 }
 
 export interface Approval {
@@ -130,6 +131,7 @@ export interface Metrics {
   medianMinutesToResolve: number | null;
   missedDisputeDeadlines: number;
   proactiveUpdatesSent: number;
+  csat: number | null;
 }
 
 export interface Snapshot {
@@ -166,6 +168,7 @@ export interface Meta {
   tools: { name: string; kind: string; description: string }[];
   kb: { id: string; source: string; title: string; text: string }[];
   voice: { sarvam: boolean };
+  whatsapp: { enabled: boolean; room: string; number: string | null; joinCode: string | null };
 }
 
 export interface AuditEntry {
@@ -179,10 +182,25 @@ export interface AuditEntry {
   hash: string;
 }
 
+/** Each browser tab works in its own isolated room unless ?room= is given (e.g. ?room=whatsapp). */
+export const ROOM: string = (() => {
+  const fromUrl = new URLSearchParams(location.search).get("room");
+  if (fromUrl) return fromUrl;
+  try {
+    const saved = sessionStorage.getItem("resolveai-room");
+    if (saved) return saved;
+    const id = `r-${Math.random().toString(36).slice(2, 10)}`;
+    sessionStorage.setItem("resolveai-room", id);
+    return id;
+  } catch {
+    return `r-${Math.random().toString(36).slice(2, 10)}`;
+  }
+})();
+
 export async function api<T = unknown>(path: string, body?: unknown, method?: string): Promise<T> {
   const res = await fetch(`/api${path}`, {
     method: method ?? (body === undefined ? "GET" : "POST"),
-    headers: body === undefined ? undefined : { "Content-Type": "application/json" },
+    headers: { "x-room": ROOM, ...(body === undefined ? {} : { "Content-Type": "application/json" }) },
     body: body === undefined ? undefined : JSON.stringify(body),
   });
   const j = await res.json();

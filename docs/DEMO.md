@@ -10,14 +10,14 @@ Click **A · Manjunath's ₹480**.
 
 Point at, in order:
 - **HEAR**: the Kannada voice note, language detection, and *"What the model sees"* (PII redacted).
-- **PLAN**: *"Check the ledger first, not the device."* The agent searches the ledger and finds the ₹480 debit with the credit pending, among the healthy payments.
+- **PLAN**: *"Check the ledger first, not the device."* The agent searches the ledger and finds the ₹480 debit with the credit pending, among the healthy payments, then confirms with Paytm PG's transaction status (`PENDING / 402`), the bank and UDIR.
 - **CHECK**: policy `P3 · P4` allows the bank ticket because the debit and the pending credit are **tool-confirmed** and the ticket is reversible (L1).
 - The phone gets a **Kannada** reply with the **exact** time (EN gloss below it). The payer gets *"don't pay again."*
 - Case file: L0 → L1 lit, confirmed facts with their source tool, and a watcher armed.
 
 > "It doesn't say 'raise a request'. It raised it, promised an exact time, and it keeps the case open until the money lands."
 
-Click **+1 day** (sim clock). The watcher fires, the agent **re-reads** the bank, the soundbox announces the credit (turn on 🔊 voice), and the verifier closes: **Verified & closed**.
+Click **+1 day** (sim clock). The watcher fires, the agent **re-reads** the bank, the soundbox announces the credit (turn on 🔊 voice), and the verifier closes: **Verified & closed**. Tap ▶ listen on the Kannada reply, then give it ★★★★★.
 
 ## 1:15 · Policy decides (B)
 
@@ -39,7 +39,7 @@ Toggle **Model outage**, run **F**, and the case **fails safe** to humans. Toggl
 
 Click **E**: a stuck payment is caught on the event stream and the merchant hears first.
 
-**Evals & shadow** tab → **Run with offline planner**: 13/13 golden cases asserted on the ledger, settlement and dispute systems, plus shadow-replay agreement with human actions.
+**Evals & shadow** tab → **Run with offline planner** (or Groq → Gemini if keys are set): 16/16 golden cases, including three prompt-injection attacks, asserted on the ledger, settlement and dispute systems. In the shadow replay the agent makes the right call on 93% of tickets vs 79% for humans. Be upfront about the one miss: there's no duplicate-debit workflow yet, so it escalates.
 
 **Audit log** → **Tamper demo**: the chain breaks at the edited entry.
 

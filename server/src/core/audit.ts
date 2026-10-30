@@ -24,12 +24,14 @@ function digest(e: Omit<AuditEntry, "hash">) {
 
 export class AuditLog {
   private entries: AuditEntry[] = [];
+  onAppend?: (e: AuditEntry) => void;
 
   append(caseId: string | null, actor: string, type: string, payload: unknown, ts: number) {
     const prevHash = this.entries.at(-1)?.hash ?? GENESIS;
     const base = { seq: this.entries.length + 1, ts, caseId, actor, type, payload, prevHash };
     const entry: AuditEntry = { ...base, hash: digest(base) };
     this.entries.push(entry);
+    this.onAppend?.(entry);
     return entry;
   }
 

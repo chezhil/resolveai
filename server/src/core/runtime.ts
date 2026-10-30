@@ -23,7 +23,9 @@ import { TOOL_MAP, type ToolCtx } from "../tools/registry.js";
 import type { Brain, ToolCall, ToolResult } from "../agent/brain.js";
 import { ModelOutage } from "../agent/brain.js";
 import { PlannerBrain } from "../agent/planner.js";
-import { LlmBrain, configuredProviders, systemPrompt } from "../agent/llm.js";
+import { LlmBrain, configuredProviders, quoteUntrusted, systemPrompt } from "../agent/llm.js";
+import { randomBytes } from "node:crypto";
+import { MockPaytmPg, type PaytmPg } from "../integrations/paytm.js";
 import { triage, type Triage } from "../agent/triage.js";
 import { detectLang, render, soundboxLine } from "../sim/lang.js";
 
@@ -43,6 +45,7 @@ const MAX_TURNS = 14;
 
 export class Runtime extends EventEmitter {
   world = new World();
+  paytm: PaytmPg = new MockPaytmPg(this.world);
   audit = new AuditLog();
   policy: PolicyConfig = { ...DEFAULT_POLICY };
   config: RuntimeConfig;
@@ -67,6 +70,7 @@ export class Runtime extends EventEmitter {
     this.config = { brain: "auto", shadow: false, chaosModelOutage: false, pacingMs: 0, stuckAfterMin: 10, ...config };
     this.policy.shadow = this.config.shadow;
     this.world.on("world", (e: WorldEvent) => this.onWorld(e));
+    this.audit.onAppend = (e) => this.emit("audit", e);
   }
 
   // ------------------------------------------------------------------ public API
@@ -95,7 +99,7 @@ export class Runtime extends EventEmitter {
         this.trace(open, "HEAR", "Repeat contact attached to the open case", { detail: "Status already shared; no new case opened" });
         const vault = this.vaults.get(open.id)!;
         this.enqueue(open.id, async () => {
-          this.brains.get(open.id)!.event(`Merchant sent a follow-up while the case is ${open.status}: "${vault.redact(text)}". Reply with the current status in their language; do not repeat actions already taken.`, { type: "FOLLOW_UP" });
+          this.brains.get(open.id)!.event(`Merchant sent a follow-up while the case is ${open.status}:\n${quoteUntrusted(vault.redact(text))}\nReply with the current status in their language; do not repeat actions already taken.`, { type: "FOLLOW_UP" });
           if (open.status !== "AWAITING_APPROVAL") open.status = "IN_PROGRESS";
           await this.drive(open);
         });
@@ -136,6 +140,7 @@ export class Runtime extends EventEmitter {
       detail: `${kase.inboundRedacted}\n\nLanguage: ${tri.lang} · Workflow: ${tri.workflow}${tri.amount ? ` · Amount: ₹${tri.amount}` : ""}${tri.signals.length ? ` · Signals: ${tri.signals.join(", ")}` : ""}${vault.size ? ` · PII redacted: ${vault.size} item(s)` : ""}`,
     });
 
+    const nonce = randomBytes(4).toString("hex");
     const brain: Brain =
       kase.brain === "llm"
         ? new LlmBrain(
@@ -147,8 +152,10 @@ export class Runtime extends EventEmitter {
               now: fmtIST(this.world.now()),
               signals: tri.signals,
               proactive: kase.proactive,
+              nonce,
             }),
-            kase.proactive ? `[EVENT STREAM] ${kase.inboundRedacted}` : `Merchant message (${channel}): ${kase.inboundRedacted}`,
+            kase.proactive ? `[EVENT ${nonce}] Event stream: ${kase.inboundRedacted}` : `New message from the merchant on ${channel}:\n${quoteUntrusted(kase.inboundRedacted)}`,
+            nonce,
           )
         : new PlannerBrain(this, kase);
     this.brains.set(id, brain);
@@ -192,6 +199,17 @@ export class Runtime extends EventEmitter {
       this.detectStuck();
     }
     this.emitUpdate();
+  }
+
+  /** One-tap CSAT from the merchant after a verified close. */
+  rate(caseId: string, score: number) {
+    const kase = this.cases.get(caseId);
+    if (!kase) throw new Error("Unknown case");
+    if (kase.status !== "RESOLVED") throw new Error("Only verified, closed cases can be rated");
+    kase.csat = Math.max(1, Math.min(5, Math.round(score)));
+    this.audit.append(kase.id, "merchant", "csat", { score: kase.csat }, this.world.now());
+    this.emitUpdate();
+    return kase;
   }
 
   setConfig(c: Partial<RuntimeConfig>) {
@@ -342,7 +360,7 @@ export class Runtime extends EventEmitter {
     // ALLOW
     let raw: any;
     try {
-      raw = tool.run(input, ctx);
+      raw = await tool.run(input, ctx);
     } catch (e) {
       const msg = (e as Error).message;
       if (tool.name === "close_case") this.trace(kase, "VERIFY", "Verification failed — case stays open", { detail: msg, tool: tool.name });
@@ -613,6 +631,10 @@ export class Runtime extends EventEmitter {
       medianMinutesToResolve: ttr.length ? ttr[Math.floor(ttr.length / 2)] : null,
       missedDisputeDeadlines: disputes.filter((c) => [...this.world.disputes.values()].some((d) => d.merchantId === c.merchantId && d.status === "OPEN" && this.world.now() > d.deadline)).length,
       proactiveUpdatesSent: this.messages.filter((m) => m.from === "agent").length,
+      csat: (() => {
+        const r = all.filter((c) => c.csat).map((c) => c.csat!);
+        return r.length ? Math.round((r.reduce((a, b) => a + b, 0) / r.length) * 10) / 10 : null;
+      })(),
     };
   }
 
@@ -662,6 +684,7 @@ function label(tool: string, input: any) {
     search_transactions: "Searched the payments ledger",
     get_bank_status: `Checked beneficiary bank for RRN ${input?.rrn}`,
     get_udir_status: `Checked UDIR and TAT rules for RRN ${input?.rrn}`,
+    paytm_order_status: `Paytm PG transaction status for ${input?.order_id}`,
     get_settlement_status: "Checked settlement batches",
     get_kyc_profile: "Pulled KYC profile",
     verify_bank_account: "Ran penny-drop verification",

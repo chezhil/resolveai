@@ -1,7 +1,7 @@
 // `npm run eval` — golden cases + shadow replay. Exits non-zero on any failure (used in CI).
 //   --llm        run the golden cases against Groq/Gemini instead of the offline planner
 
-import "dotenv/config";
+import "../env.js";
 import { runGolden } from "./golden.js";
 import { runShadowReplay } from "./shadow.js";
 
@@ -19,7 +19,11 @@ console.log(`\n${passed}/${results.length} golden cases passed`);
 
 const shadow = await runShadowReplay();
 console.log(`\nShadow replay on ${shadow.rows.length} historical tickets`);
-for (const r of shadow.rows) console.log(`${r.agrees ? "✅" : "❌"} ${r.id}  human: ${pad(r.humanAction, 24)} agent: ${r.agentProposed.join(", ")}`);
-console.log(`Agreement with human action: ${(shadow.agreement * 100).toFixed(0)}% · contacts avoided: ${shadow.contactsAvoided}\n`);
+for (const r of shadow.rows) {
+  console.log(`${r.correct ? "✅" : "❌"} ${r.id}  human: ${pad(r.humanAction, 24)} right call: ${pad(r.gold, 24)} agent: ${r.agentProposed.join(", ")}`);
+  if (r.note) console.log(`      ${r.note}`);
+}
+const pct = (x: number) => `${(x * 100).toFixed(0)}%`;
+console.log(`\nAgent made the right call: ${pct(shadow.agentCorrect)} · human did: ${pct(shadow.humanCorrect)} · agreement with human: ${pct(shadow.agreement)} · contacts avoided: ${shadow.contactsAvoided}\n`);
 
 process.exit(passed === results.length ? 0 : 1);

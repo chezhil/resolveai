@@ -22,8 +22,12 @@ interface ShadowRow {
   id: string;
   workflow: string;
   humanAction: string;
+  gold: string;
   agentProposed: string[];
   agrees: boolean;
+  correct: boolean;
+  humanCorrect: boolean;
+  note?: string;
   humanMinutes: number;
   agentSeconds: number;
   humanContacts: number;
@@ -31,7 +35,7 @@ interface ShadowRow {
 interface Result {
   brain: string;
   golden: Golden[];
-  shadow: { rows: ShadowRow[]; agreement: number; medianHumanMinutes: number; contactsAvoided: number };
+  shadow: { rows: ShadowRow[]; agreement: number; agentCorrect: number; humanCorrect: number; medianHumanMinutes: number; contactsAvoided: number };
 }
 
 export function Evals({ llmAvailable }: { llmAvailable: boolean }) {
@@ -79,7 +83,7 @@ export function Evals({ llmAvailable }: { llmAvailable: boolean }) {
         <>
           <div className="grid gap-3 sm:grid-cols-4">
             <Stat tone="bg-sun" big={`${passed}/${res.golden.length}`} label="golden cases passed" />
-            <Stat tone="bg-sky" big={`${Math.round(res.shadow.agreement * 100)}%`} label="agreement with human action (shadow)" />
+            <Stat tone="bg-sky" big={`${Math.round(res.shadow.agentCorrect * 100)}% vs ${Math.round(res.shadow.humanCorrect * 100)}%`} label="right call on replayed tickets: agent vs human" />
             <Stat tone="bg-rose" big={`${res.shadow.contactsAvoided}`} label="repeat contacts avoided on replay" />
             <Stat tone="bg-mint" big={`${(res.shadow.medianHumanMinutes / 60).toFixed(0)}h → secs`} label="median human time vs agent" />
           </div>
@@ -112,12 +116,14 @@ export function Evals({ llmAvailable }: { llmAvailable: boolean }) {
           </div>
           <div className="card overflow-x-auto">
             <div className="border-b-2 border-ink px-4 py-2">
-              <SectionLabel>Shadow mode · anonymised historical tickets (synthetic stand-ins)</SectionLabel>
+              <SectionLabel>
+                Shadow mode · historical tickets (synthetic stand-ins) · agreement with human {Math.round(res.shadow.agreement * 100)}%
+              </SectionLabel>
             </div>
             <table className="w-full text-left text-[12.5px]">
               <thead className="label bg-cream text-muted">
                 <tr>
-                  {["Ticket", "Workflow", "Human did", "Agent proposed", "Human took", "Contacts"].map((h) => (
+                  {["Ticket", "Human did", "Right call", "Agent proposed", "Human took", "Contacts", "Note"].map((h) => (
                     <th key={h} className="px-3 py-2">
                       {h}
                     </th>
@@ -127,14 +133,15 @@ export function Evals({ llmAvailable }: { llmAvailable: boolean }) {
               <tbody>
                 {res.shadow.rows.map((r) => (
                   <tr key={r.id} className="border-t border-ink/10">
-                    <td className="px-3 py-2 font-mono font-bold">
-                      {r.agrees ? "✅" : "❌"} {r.id}
+                    <td className="px-3 py-2 font-mono font-bold whitespace-nowrap">
+                      {r.correct ? "✅" : "❌"} {r.id}
                     </td>
-                    <td className="px-3 py-2">{r.workflow}</td>
-                    <td className="px-3 py-2 font-mono">{r.humanAction}</td>
+                    <td className={cx("px-3 py-2 font-mono", !r.humanCorrect && "text-ember")}>{r.humanAction}</td>
+                    <td className="px-3 py-2 font-mono">{r.gold}</td>
                     <td className="px-3 py-2 font-mono text-muted">{r.agentProposed.join(", ")}</td>
                     <td className="px-3 py-2">{(r.humanMinutes / 60).toFixed(1)} h</td>
                     <td className="px-3 py-2">{r.humanContacts} → 1</td>
+                    <td className="max-w-[280px] px-3 py-2 text-[11.5px] text-muted">{r.note ?? ""}</td>
                   </tr>
                 ))}
               </tbody>

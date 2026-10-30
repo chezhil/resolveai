@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import type { Announcement, Snapshot, TraceEvent } from "./api";
+import { ROOM } from "./api";
 
 export function useLive() {
   const [snap, setSnap] = useState<Snapshot | null>(null);
@@ -11,7 +12,7 @@ export function useLive() {
   const seen = useRef(new Set<string>());
 
   useEffect(() => {
-    const es = new EventSource("/api/stream");
+    const es = new EventSource(`/api/stream?room=${encodeURIComponent(ROOM)}`);
     es.onopen = () => setConnected(true);
     es.onerror = () => setConnected(false);
     es.addEventListener("state", (e) => {
@@ -34,7 +35,7 @@ export function useLive() {
 
   /** Backfill a case's trace (e.g. after a page reload). */
   const hydrate = async (caseId: string) => {
-    const res = await fetch(`/api/cases/${caseId}`);
+    const res = await fetch(`/api/cases/${caseId}`, { headers: { "x-room": ROOM } });
     if (!res.ok) return;
     const d = await res.json();
     for (const t of d.trace as TraceEvent[]) seen.current.add(t.id);

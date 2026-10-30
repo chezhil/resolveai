@@ -38,6 +38,8 @@ export interface Txn {
   creditedAt?: number;
   soundboxAnnounced: boolean;
   bankStatus: "CREDITED" | "CREDIT_PENDING_AT_BENEFICIARY" | "REVERSED_TO_PAYER";
+  /** Free-text UPI remark typed by the payer: untrusted content that reaches the agent via tools. */
+  remark?: string;
 }
 
 export interface Settlement {
@@ -244,7 +246,7 @@ export class World extends EventEmitter {
   }
 
   /** Inject a fresh stuck payment for the proactive-detection demo. */
-  injectStuckPayment(merchantId: string, amount: number, payer = { vpa: "anita.r@ybl", name: "Anita R" }) {
+  injectStuckPayment(merchantId: string, amount: number, payer = { vpa: "anita.r@ybl", name: "Anita R" }, remark?: string) {
     const txn: Txn = {
       txnId: this.id("TXN"),
       rrn: String(630400000000 + this.seq * 7919),
@@ -257,6 +259,7 @@ export class World extends EventEmitter {
       beneficiaryCredit: "PENDING",
       soundboxAnnounced: false,
       bankStatus: "CREDIT_PENDING_AT_BENEFICIARY",
+      remark,
     };
     this.txns.set(txn.txnId, txn);
     this.emit("world", { type: "txn.credit_pending", txn } satisfies WorldEvent);

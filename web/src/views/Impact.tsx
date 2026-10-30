@@ -17,7 +17,7 @@ export function Impact({ snap, meta }: { snap: Snapshot; meta: Meta | null }) {
   const m = snap.metrics;
 
   return (
-    <div className="grid gap-4 lg:grid-cols-2">
+    <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
       <div className="card bg-ink p-5 text-white">
         <Pill tone="sky">Illustrative unit economics</Pill>
         <div className="mt-3 font-display text-2xl font-extrabold">Saving = tickets × auto-resolve rate × cost gap</div>

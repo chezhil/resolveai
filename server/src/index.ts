@@ -1,132 +1,133 @@
 // HTTP + SSE API for the ResolveAI console.
+// Each visitor works in an isolated room (?room= / x-room header); see rooms.ts.
 
-import "dotenv/config";
+import "./env.js";
 import express from "express";
 import cors from "cors";
 import path from "node:path";
 import fs from "node:fs";
 import { fileURLToPath } from "node:url";
-import { Runtime } from "./core/runtime.js";
 import { SCENARIOS } from "./sim/scenarios.js";
 import { runGolden } from "./evals/golden.js";
 import { runShadowReplay } from "./evals/shadow.js";
 import { RULES } from "./policy/engine.js";
 import { TOOLS } from "./tools/registry.js";
 import { KB } from "./sim/kb.js";
+import { configuredProviders } from "./agent/llm.js";
 import { sarvamEnabled, speak, transcribe } from "./voice/sarvam.js";
+import { cleanRoomId, getRoom, onAgentMessage, resetRoom, roomCount, type Room } from "./rooms.js";
+import { archive } from "./core/archive.js";
+import { WHATSAPP_ROOM, handleInbound, outbound, whatsappEnabled } from "./channels/whatsapp.js";
 
 // In dev the console proxies /api to :8787 (PORT may belong to Vite); in production one process serves both on PORT.
 const DEV = process.argv.includes("--dev");
 const PORT = Number((DEV ? process.env.API_PORT : process.env.PORT) ?? 8787);
 const app = express();
+app.set("trust proxy", true);
 app.use(cors());
 app.use(express.json({ limit: "2mb" }));
 
-let rt = makeRuntime();
-const clients = new Set<express.Response>();
+onAgentMessage(outbound);
 
-function makeRuntime() {
-  const r = new Runtime({ pacingMs: Number(process.env.PACING_MS ?? 450), brain: (process.env.BRAIN as any) ?? "auto" });
-  const push = (type: string, data: unknown) => {
-    const line = `event: ${type}\ndata: ${JSON.stringify(data)}\n\n`;
-    for (const c of clients) c.write(line);
-  };
-  let pending = false;
-  r.on("update", () => {
-    if (pending) return;
-    pending = true;
-    setTimeout(() => {
-      pending = false;
-      push("state", r.snapshot());
-    }, 60);
-  });
-  r.on("trace", (e) => push("trace", e));
-  r.on("message", (m) => push("message", m));
-  r.on("world", (e) => e.type === "soundbox.announce" && push("soundbox", e.announcement));
-  return r;
-}
+const roomOf = (req: express.Request): Room => getRoom(cleanRoomId(req.header("x-room") ?? req.query.room));
 
-const wrap = (fn: (req: express.Request, res: express.Response) => unknown) => async (req: express.Request, res: express.Response) => {
+const wrap = (fn: (req: express.Request, room: Room) => unknown) => async (req: express.Request, res: express.Response) => {
   try {
-    const out = await fn(req, res);
+    const out = await fn(req, roomOf(req));
     if (!res.headersSent) res.json(out ?? { ok: true });
   } catch (e) {
     res.status(400).json({ error: (e as Error).message });
   }
 };
 
-app.get("/api/health", (_q, s) => s.json({ ok: true, brain: rt.brainKind() }));
+// Evals spin up many worlds; keep one run at a time per process.
+let evalRun: Promise<unknown> | null = null;
+
+app.get("/api/health", (_q, s) => s.json({ ok: true, rooms: roomCount(), providers: configuredProviders().map((p) => p.name) }));
 
 app.get("/api/stream", (req, res) => {
-  res.set({ "Content-Type": "text/event-stream", "Cache-Control": "no-cache", Connection: "keep-alive" });
+  const room = roomOf(req);
+  res.set({ "Content-Type": "text/event-stream", "Cache-Control": "no-cache", Connection: "keep-alive", "X-Accel-Buffering": "no" });
   res.flushHeaders();
-  res.write(`event: state\ndata: ${JSON.stringify(rt.snapshot())}\n\n`);
-  clients.add(res);
-  const ping = setInterval(() => res.write(": ping\n\n"), 20_000);
+  res.write(`event: state\ndata: ${JSON.stringify(room.rt.snapshot())}\n\n`);
+  room.clients.add(res);
+  const ping = setInterval(() => {
+    room.lastSeen = Date.now();
+    res.write(": ping\n\n");
+  }, 20_000);
   req.on("close", () => {
     clearInterval(ping);
-    clients.delete(res);
+    room.clients.delete(res);
   });
 });
 
-app.get("/api/state", wrap(() => rt.snapshot()));
-app.get("/api/cases/:id", wrap((q) => rt.caseDetail(String(q.params.id)) ?? Promise.reject(new Error("Not found"))));
+app.get("/api/state", wrap((_q, { rt }) => rt.snapshot()));
+app.get("/api/cases/:id", wrap((q, { rt }) => rt.caseDetail(String(q.params.id)) ?? Promise.reject(new Error("Not found"))));
 app.get("/api/meta", wrap(() => ({
   scenarios: SCENARIOS.map(({ run, ...s }) => s),
   rules: RULES,
   tools: TOOLS.map((t) => ({ name: t.name, kind: t.kind, description: t.description })),
   kb: KB,
   voice: { sarvam: sarvamEnabled() },
+  whatsapp: { enabled: whatsappEnabled(), room: WHATSAPP_ROOM, number: process.env.TWILIO_WHATSAPP_FROM?.replace("whatsapp:", "") ?? null, joinCode: process.env.TWILIO_SANDBOX_JOIN ?? null },
 })));
 
-app.post("/api/inbound", wrap((q) => {
+app.post("/api/inbound", wrap((q, { rt }) => {
   const { merchantId, text, channel } = q.body ?? {};
   if (!merchantId || !text) throw new Error("merchantId and text are required");
   return { caseId: rt.inbound(merchantId, String(text).slice(0, 2000), channel ?? "whatsapp").id };
 }));
 
-app.post("/api/scenarios/:id", wrap((q) => {
+app.post("/api/scenarios/:id", wrap((q, { rt }) => {
   const s = SCENARIOS.find((x) => x.id === q.params.id);
   if (!s) throw new Error("Unknown scenario");
   s.run(rt);
   return { ok: true };
 }));
 
-app.post("/api/approvals/:id", wrap((q) => rt.decideApproval(String(q.params.id), q.body?.decision === "REJECTED" ? "REJECTED" : "APPROVED", q.body?.by ?? "ops-lead")));
-app.post("/api/clock/advance", wrap((q) => {
+app.post("/api/approvals/:id", wrap((q, { rt }) => rt.decideApproval(String(q.params.id), q.body?.decision === "REJECTED" ? "REJECTED" : "APPROVED", q.body?.by ?? "ops-lead")));
+app.post("/api/cases/:id/csat", wrap((q, { rt }) => rt.rate(String(q.params.id), Number(q.body?.score))));
+app.post("/api/clock/advance", wrap((q, { rt }) => {
   rt.advance(Math.max(1, Math.min(Number(q.body?.minutes ?? 10), 60 * 24 * 7)));
   return { now: rt.world.now() };
 }));
-app.post("/api/config", wrap((q) => {
+app.post("/api/config", wrap((q, { rt }) => {
   const { shadow, brain, chaosModelOutage } = q.body ?? {};
   rt.setConfig({
     ...(shadow !== undefined && { shadow: !!shadow }),
-    ...(brain && { brain }),
+    ...(["auto", "llm", "planner"].includes(brain) && { brain }),
     ...(chaosModelOutage !== undefined && { chaosModelOutage: !!chaosModelOutage }),
   });
   return rt.config;
 }));
-app.post("/api/reset", wrap(() => {
-  const keep = { ...rt.config };
-  rt.removeAllListeners();
-  rt = makeRuntime();
-  rt.setConfig({ shadow: keep.shadow, brain: keep.brain, chaosModelOutage: false });
-  for (const c of clients) c.write(`event: state\ndata: ${JSON.stringify(rt.snapshot())}\n\n`);
+app.post("/api/reset", wrap((_q, room) => {
+  resetRoom(room);
   return { ok: true };
 }));
-app.post("/api/events/stuck-payment", wrap((q) => {
+app.post("/api/events/stuck-payment", wrap((q, { rt }) => {
   const t = rt.world.injectStuckPayment(q.body?.merchantId ?? "M1005", Number(q.body?.amount ?? 2350));
   return { txnId: t.txnId, rrn: t.rrn };
 }));
 
-app.get("/api/audit", wrap(() => ({ entries: rt.audit.list(), verify: rt.audit.verify() })));
-app.post("/api/audit/verify", wrap(() => rt.audit.verify()));
-app.post("/api/audit/tamper", wrap((q) => ({ tampered: rt.audit.tamper(Number(q.body?.seq ?? 2)), verify: rt.audit.verify() })));
+app.get("/api/audit", wrap((_q, { rt }) => ({ entries: rt.audit.list(), verify: rt.audit.verify() })));
+app.post("/api/audit/verify", wrap((_q, { rt }) => rt.audit.verify()));
+app.post("/api/audit/tamper", wrap((q, { rt }) => ({ tampered: rt.audit.tamper(Number(q.body?.seq ?? 2)), verify: rt.audit.verify() })));
+app.get("/api/archive", wrap(async () => {
+  await archive.ready;
+  return archive.recent(Number(process.env.ARCHIVE_LIMIT ?? 50));
+}));
 
 app.post("/api/evals/run", wrap(async (q) => {
   const brain = q.body?.brain === "llm" ? "llm" : "planner";
-  const [golden, shadow] = await Promise.all([runGolden({ brain }), runShadowReplay()]);
-  return { brain, golden, shadow };
+  if (brain === "llm" && !configuredProviders().length) throw new Error("Set GROQ_API_KEY or GEMINI_API_KEY to run the LLM evals");
+  if (evalRun) throw new Error("An eval run is already in progress; try again in a moment");
+  evalRun = Promise.all([runGolden({ brain }), runShadowReplay()]);
+  try {
+    const [golden, shadow] = (await evalRun) as [Awaited<ReturnType<typeof runGolden>>, Awaited<ReturnType<typeof runShadowReplay>>];
+    return { brain, golden, shadow };
+  } finally {
+    evalRun = null;
+  }
 }));
 
 app.post("/api/voice/transcribe", express.raw({ type: ["audio/*", "application/octet-stream"], limit: "10mb" }), wrap(async (q) => {
@@ -138,6 +139,13 @@ app.post("/api/voice/tts", wrap(async (q) => {
   return speak(String(q.body?.text ?? ""), String(q.body?.lang ?? "en"));
 }));
 
+app.post("/api/channels/whatsapp/twilio", express.urlencoded({ extended: false }), (req, res) => {
+  handleInbound(req, res).catch((e) => {
+    console.warn(`[whatsapp] ${e.message}`);
+    if (!res.headersSent) res.type("text/xml").send("<Response></Response>");
+  });
+});
+
 // Serve the built console in production.
 const dist = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../../web/dist");
 if (fs.existsSync(dist)) {
@@ -146,5 +154,8 @@ if (fs.existsSync(dist)) {
 }
 
 app.listen(PORT, () => {
-  console.log(`ResolveAI server on http://localhost:${PORT} · brain: ${rt.brainKind()}${sarvamEnabled() ? " · Sarvam voice on" : ""}`);
+  const p = configuredProviders().map((x) => x.name);
+  console.log(
+    `ResolveAI server on http://localhost:${PORT} · brain: ${p.length ? p.join(" → ") : "offline planner"}${sarvamEnabled() ? " · Sarvam voice" : ""}${whatsappEnabled() ? ` · WhatsApp → room "${WHATSAPP_ROOM}"` : ""}`,
+  );
 });

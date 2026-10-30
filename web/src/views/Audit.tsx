@@ -56,7 +56,8 @@ export function Audit({ version }: { version: number }) {
           <div className="border-b-2 border-ink px-4 py-2">
             <SectionLabel>{entries.length} entries</SectionLabel>
           </div>
-          <div className="scroll-thin max-h-[70vh] overflow-y-auto">
+          <div className="scroll-thin max-h-[70vh] overflow-auto">
+            <div className="min-w-[640px]">
             {[...entries].reverse().map((e) => {
               const broken = verify && !verify.ok && verify.brokenAt !== undefined && e.seq >= verify.brokenAt;
               return (
@@ -78,6 +79,7 @@ export function Audit({ version }: { version: number }) {
                 </div>
               );
             })}
+            </div>
           </div>
         </div>
       )}

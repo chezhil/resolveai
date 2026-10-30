@@ -115,7 +115,8 @@ export class PlannerBrain implements Brain {
         this.data.rrn = stuck.rrn;
         this.data.amount = stuck.amount;
         this.phase = "diagnose";
-        return this.turn(`Matched ₹${stuck.amount} (RRN ${stuck.rrn}): payer debited, merchant credit pending. Confirm with the bank and check the TAT window.`, [
+        return this.turn(`Matched ₹${stuck.amount} (RRN ${stuck.rrn}): payer debited, merchant credit pending. Confirm with Paytm PG and the bank, and check the TAT window.`, [
+          this.call("paytm_order_status", { order_id: stuck.order_id }),
           this.call("get_bank_status", { rrn: stuck.rrn }),
           this.call("get_udir_status", { rrn: stuck.rrn }),
         ]);
@@ -123,9 +124,10 @@ export class PlannerBrain implements Brain {
       case "diagnose": {
         const bank = this.results.get("get_bank_status");
         const udir = this.results.get("get_udir_status");
+        const pg = this.results.get("paytm_order_status")?.body?.resultInfo;
         this.phase = "notify";
         return this.turn(
-          `Bank confirms ${bank?.beneficiary_status}: ${bank?.reason}. Within the RBI window (resolve by ${udir?.resolve_by}). L1 action: raise a push-credit ticket.`,
+          `Paytm PG says ${pg?.resultStatus ?? "?"} (${pg?.resultCode ?? "-"}); bank confirms ${bank?.beneficiary_status}: ${bank?.reason}. Within the RBI window (resolve by ${udir?.resolve_by}). L1 action: raise a push-credit ticket.`,
           [this.call("raise_bank_ticket", { rrn: this.data.rrn, kind: "PUSH_CREDIT" })],
         );
       }

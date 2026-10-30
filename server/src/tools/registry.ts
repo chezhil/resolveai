@@ -7,6 +7,7 @@ import type { Runtime } from "../core/runtime.js";
 import type { PiiVault } from "../core/pii.js";
 import { searchKb } from "../sim/kb.js";
 import { fmtIST, HOUR, MIN } from "../sim/world.js";
+import { orderIdFor } from "../integrations/paytm.js";
 
 export interface ToolCtx {
   rt: Runtime;
@@ -23,7 +24,7 @@ export interface ToolDef {
   schema: Record<string, unknown>;
   /** Rupee value this call could move, for policy tiering. */
   amount?: (input: any, ctx: ToolCtx) => number | undefined;
-  run: (input: any, ctx: ToolCtx) => unknown;
+  run: (input: any, ctx: ToolCtx) => unknown | Promise<unknown>;
   facts?: (input: any, output: any, ctx: ToolCtx) => Omit<Fact, "source" | "at">[];
 }
 
@@ -94,6 +95,7 @@ export const TOOLS: ToolDef[] = [
         count: rows.length,
         transactions: rows.slice(0, 12).map((t) => ({
           txn_id: t.txnId,
+          order_id: orderIdFor(t),
           rrn: t.rrn,
           amount: t.amount,
           time: iso(t.ts),
@@ -101,6 +103,7 @@ export const TOOLS: ToolDef[] = [
           payer_debit: t.payerDebit,
           merchant_credit: t.beneficiaryCredit,
           soundbox_announced: t.soundboxAnnounced,
+          ...(t.remark && { payer_remark: t.remark }),
         })),
       };
     },
@@ -135,6 +138,18 @@ export const TOOLS: ToolDef[] = [
       };
     },
     facts: (i, o) => [{ key: `bank:${i.rrn}`, value: { status: o.beneficiary_status, debit: o.payer_debit } }],
+  },
+  {
+    name: "paytm_order_status",
+    kind: "read",
+    description:
+      "Paytm Payment Gateway Transaction Status API for an order: resultStatus TXN_SUCCESS / PENDING / TXN_FAILURE with the bank's RRN. Use it to confirm what Paytm's own ledger says.",
+    schema: obj({ order_id: str("Order id (from search_transactions) or txn id") }, ["order_id"]),
+    run: async (i, ctx) => {
+      need(i, "order_id");
+      return ctx.rt.paytm.orderStatus(String(i.order_id));
+    },
+    facts: (_i, o) => [{ key: `pg:${o.body.bankTxnId}`, value: { status: o.body.resultInfo.resultStatus, code: o.body.resultInfo.resultCode } }],
   },
   {
     name: "get_udir_status",

@@ -39,7 +39,7 @@ export function Console({ snap, meta, traces, live, selected, select }: Props) {
   };
 
   return (
-    <div className="grid gap-4 xl:grid-cols-[340px_minmax(0,1fr)_360px]">
+    <div className="grid grid-cols-1 gap-4 xl:grid-cols-[340px_minmax(0,1fr)_360px]">
       {/* Channels */}
       <div className="space-y-3">
         <div className="card p-3">
@@ -77,9 +77,26 @@ export function Console({ snap, meta, traces, live, selected, select }: Props) {
             </button>
           ))}
         </div>
-        <Phone merchant={merchant} messages={msgs} onSent={select} />
-        <Soundbox merchant={merchant} announcements={snap.announcements} live={live} />
+        <Phone merchant={merchant} messages={msgs} cases={snap.cases} sarvam={!!meta?.voice.sarvam} onSent={select} />
+        <Soundbox merchant={merchant} announcements={snap.announcements} live={live} sarvam={!!meta?.voice.sarvam} />
         <PayerPhone messages={msgs} />
+        {meta?.whatsapp.enabled && (
+          <div className="card bg-[#d9fdd3] p-3 text-[12.5px]">
+            <div className="label mb-1 text-muted">Live WhatsApp channel</div>
+            Message <b>{meta.whatsapp.number}</b>
+            {meta.whatsapp.joinCode && (
+              <>
+                {" "}
+                with <b className="font-mono">{meta.whatsapp.joinCode}</b> first
+              </>
+            )}
+            , then open{" "}
+            <a className="font-semibold text-brand underline" href={`?room=${meta.whatsapp.room}`}>
+              the WhatsApp room
+            </a>{" "}
+            to watch your case. You play {snap.merchants.find((m) => m.id === "M1001")?.owner}.
+          </div>
+        )}
       </div>
 
       {/* Trace */}

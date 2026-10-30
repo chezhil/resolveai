@@ -1,15 +1,23 @@
 import { useEffect, useRef, useState } from "react";
-import type { Announcement, ChatMessage, Merchant } from "../lib/api";
+import type { Announcement, Case, ChatMessage, Merchant } from "../lib/api";
 import { api, fmtClock } from "../lib/api";
+import { speak, startRecording } from "../lib/voice";
 import { Button, Pill, cx } from "./ui";
 
-const SPEECH_LANG = { kn: "kn-IN", hi: "hi-IN", en: "en-IN" } as const;
+interface PhoneProps {
+  merchant?: Merchant;
+  messages: ChatMessage[];
+  cases: Case[];
+  sarvam: boolean;
+  onSent?: (caseId: string) => void;
+}
 
-export function Phone({ merchant, messages, onSent }: { merchant?: Merchant; messages: ChatMessage[]; onSent?: (caseId: string) => void }) {
+export function Phone({ merchant, messages, cases, sarvam, onSent }: PhoneProps) {
   const [text, setText] = useState("");
   const [gloss, setGloss] = useState(true);
   const [listening, setListening] = useState(false);
   const [err, setErr] = useState("");
+  const stopRef = useRef<null | (() => Promise<string>)>(null);
   const box = useRef<HTMLDivElement>(null);
   useEffect(() => {
     if (box.current) box.current.scrollTop = box.current.scrollHeight;
@@ -30,18 +38,34 @@ export function Phone({ merchant, messages, onSent }: { merchant?: Merchant; mes
     }
   };
 
-  const listen = () => {
-    const SR = (window as any).SpeechRecognition ?? (window as any).webkitSpeechRecognition;
-    if (!SR) return setErr("Voice input needs Chrome (Web Speech API) or SARVAM_API_KEY on the server.");
-    const r = new SR();
-    r.lang = SPEECH_LANG[merchant.lang];
-    r.interimResults = false;
-    r.onresult = (e: any) => setText(e.results[0][0].transcript);
-    r.onend = () => setListening(false);
-    r.onerror = () => setListening(false);
-    setListening(true);
-    r.start();
+  const listen = async () => {
+    setErr("");
+    if (listening && stopRef.current) {
+      const stop = stopRef.current;
+      stopRef.current = null;
+      setListening(false);
+      try {
+        const t = await stop();
+        if (t) setText(t);
+      } catch (e) {
+        setErr((e as Error).message);
+      }
+      return;
+    }
+    try {
+      stopRef.current = await startRecording(merchant.lang, sarvam);
+      setListening(true);
+    } catch (e) {
+      setErr((e as Error).message);
+    }
   };
+
+  const play = (m: ChatMessage) => speak(m.text, m.lang, sarvam).catch((e) => setErr((e as Error).message));
+  const rate = (caseId: string, score: number) => api(`/cases/${caseId}/csat`, { score }).catch((e) => setErr((e as Error).message));
+  // Offer the one-tap rating under the last agent message of a verified case.
+  const lastAgent = new Map<string, string>();
+  for (const m of thread) if (m.from === "agent") lastAgent.set(m.caseId, m.id);
+  const caseOf = (id: string) => cases.find((c) => c.id === id);
 
   return (
     <div className="card overflow-hidden">
@@ -64,14 +88,34 @@ export function Phone({ merchant, messages, onSent }: { merchant?: Merchant; mes
               {m.channel === "whatsapp" && m.from === "merchant" && /maadidru|helilla/.test(m.text) && <div className="mb-1 text-[10.5px] text-muted">🎙 Voice note · transcribed</div>}
               <div className="whitespace-pre-wrap">{m.text}</div>
               {gloss && m.gloss && m.lang !== "en" && <div className="mt-1 border-t border-ink/10 pt-1 text-[11.5px] italic text-muted">{m.gloss}</div>}
-              <div className="mt-0.5 text-right text-[10px] text-muted">{fmtClock(m.simTs)}</div>
+              <div className="mt-0.5 flex items-center justify-end gap-2 text-[10px] text-muted">
+                {m.from === "agent" && (
+                  <button className="cursor-pointer text-brand" onClick={() => play(m)} title={sarvam ? "Play with Sarvam TTS" : "Play with browser voice"}>
+                    ▶ listen
+                  </button>
+                )}
+                {fmtClock(m.simTs)}
+              </div>
+              {lastAgent.get(m.caseId) === m.id && caseOf(m.caseId)?.status === "RESOLVED" && !caseOf(m.caseId)?.csat && (
+                <div className="mt-1 flex items-center gap-1 border-t border-ink/10 pt-1">
+                  <span className="text-[10.5px] text-muted">Rate:</span>
+                  {[1, 2, 3, 4, 5].map((n) => (
+                    <button key={n} onClick={() => rate(m.caseId, n)} className="cursor-pointer text-base leading-none text-sun hover:scale-125" aria-label={`${n} stars`}>
+                      ★
+                    </button>
+                  ))}
+                </div>
+              )}
+              {lastAgent.get(m.caseId) === m.id && !!caseOf(m.caseId)?.csat && (
+                <div className="mt-1 text-[10.5px] text-muted">Rated {"★".repeat(caseOf(m.caseId)!.csat!)}</div>
+              )}
             </div>
           </div>
         ))}
       </div>
       <div className="flex items-center gap-1.5 border-t-2 border-ink bg-white p-2">
-        <button title="Speak (browser speech recognition)" onClick={listen} className={cx("chunky grid h-9 w-9 shrink-0 cursor-pointer place-items-center rounded-full text-sm", listening ? "bg-ember" : "bg-sun")}>
-          🎙
+        <button title={listening ? "Stop and transcribe" : sarvam ? "Record a voice note (Sarvam ASR)" : "Speak (browser speech recognition)"} onClick={listen} className={cx("chunky grid h-9 w-9 shrink-0 cursor-pointer place-items-center rounded-full text-sm", listening ? "bg-ember" : "bg-sun")}>
+          {listening ? "■" : "🎙"}
         </button>
         <input
           value={text}
@@ -104,18 +148,16 @@ export function PayerPhone({ messages }: { messages: ChatMessage[] }) {
   );
 }
 
-export function Soundbox({ merchant, announcements, live }: { merchant?: Merchant; announcements: Announcement[]; live: Announcement | null }) {
+export function Soundbox({ merchant, announcements, live, sarvam }: { merchant?: Merchant; announcements: Announcement[]; live: Announcement | null; sarvam: boolean }) {
   const [voice, setVoice] = useState(false);
   const mine = announcements.filter((a) => a.merchantId === merchant?.id);
   const last = mine.at(-1);
   const fresh = !!live && live.merchantId === merchant?.id && live.ts === last?.ts;
 
   useEffect(() => {
-    if (!fresh || !voice || !live || !("speechSynthesis" in window)) return;
-    const u = new SpeechSynthesisUtterance(live.text);
-    u.lang = SPEECH_LANG[merchant?.lang ?? "en"];
-    window.speechSynthesis.speak(u);
-  }, [fresh, voice, live, merchant?.lang]);
+    if (!fresh || !voice || !live) return;
+    speak(live.text, merchant?.lang ?? "en", sarvam).catch(() => {});
+  }, [fresh, voice, live, merchant?.lang, sarvam]);
 
   if (!merchant) return null;
   return (

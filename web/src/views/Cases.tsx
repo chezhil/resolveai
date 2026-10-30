@@ -1,14 +1,73 @@
+import { useEffect, useState } from "react";
 import type { Snapshot } from "../lib/api";
-import { fmtTime } from "../lib/api";
+import { api, fmtTime } from "../lib/api";
 import { ApprovalCard } from "../components/CasePanel";
 import { Empty, LevelBadge, SectionLabel, StatusBadge } from "../components/ui";
+
+interface ArchiveRow {
+  room: string;
+  id: string;
+  merchant: string;
+  workflow: string;
+  status: string;
+  max_level: string;
+  csat: number | null;
+  updated_at: number;
+}
+
+function Archive() {
+  const [data, setData] = useState<{ enabled: boolean; cases: ArchiveRow[] } | null>(null);
+  useEffect(() => {
+    api<{ enabled: boolean; cases: ArchiveRow[] }>("/archive").then(setData).catch(() => {});
+  }, []);
+  if (!data) return null;
+  return (
+    <div className="card mt-4 overflow-hidden">
+      <div className="border-b-2 border-ink p-4">
+        <div className="label text-muted">Durable case memory · SQLite</div>
+        <div className="font-display text-lg font-extrabold">Archive across sessions and restarts</div>
+        {!data.enabled && <p className="text-[12.5px] text-muted">Persistence is off on this server (needs Node 22.13+ with node:sqlite).</p>}
+      </div>
+      {data.enabled && (
+        <div className="scroll-thin max-h-72 overflow-auto">
+          <table className="w-full text-left text-[12.5px]">
+            <thead className="label bg-cream text-muted">
+              <tr>
+                {["Session", "Case", "Merchant", "Workflow", "Status", "Level", "CSAT", "Updated"].map((h) => (
+                  <th key={h} className="px-3 py-2">
+                    {h}
+                  </th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {data.cases.map((c) => (
+                <tr key={c.room + c.id} className="border-t border-ink/10">
+                  <td className="px-3 py-1.5 font-mono text-[11px] text-muted">{c.room}</td>
+                  <td className="px-3 py-1.5 font-mono font-bold">{c.id}</td>
+                  <td className="px-3 py-1.5">{c.merchant}</td>
+                  <td className="px-3 py-1.5">{c.workflow}</td>
+                  <td className="px-3 py-1.5">{c.status}</td>
+                  <td className="px-3 py-1.5">{c.max_level}</td>
+                  <td className="px-3 py-1.5">{c.csat ? "★".repeat(c.csat) : "—"}</td>
+                  <td className="px-3 py-1.5 whitespace-nowrap text-muted">{new Date(c.updated_at).toLocaleString("en-IN")}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </div>
+  );
+}
 
 export function Cases({ snap, open }: { snap: Snapshot; open: (id: string) => void }) {
   const pending = snap.approvals.filter((a) => a.status === "PENDING");
   const decided = snap.approvals.filter((a) => a.status !== "PENDING");
   const handoffs = snap.cases.filter((c) => c.caseFile);
   return (
-    <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_380px]">
+    <div className="grid grid-cols-1 gap-4 lg:grid-cols-[minmax(0,1fr)_380px]">
+      <div>
       <div className="card overflow-hidden">
         <div className="border-b-2 border-ink p-4">
           <div className="label text-muted">Case memory</div>
@@ -54,6 +113,8 @@ export function Cases({ snap, open }: { snap: Snapshot; open: (id: string) => vo
             </table>
           </div>
         )}
+      </div>
+      <Archive />
       </div>
       <div className="space-y-3">
         <div>

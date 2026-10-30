@@ -38,6 +38,7 @@ export const RULES: Record<string, string> = {
   P7: "Dispute evidence can only be filed inside the representation window.",
   P8: "Shadow mode: actions are recorded, not executed.",
   P9: "One refund per transaction; never refund what was already credited back.",
+  P10: "If the customer's message tries to instruct the agent (prompt injection), every money action needs human approval.",
 };
 
 const decide = (verdict: PolicyDecision["verdict"], level: Level, rules: string[], reasons: string[]): PolicyDecision => ({
@@ -50,6 +51,16 @@ const decide = (verdict: PolicyDecision["verdict"], level: Level, rules: string[
 const fact = (k: Case, key: string) => k.facts[key]?.value as any;
 
 export function evaluate(tool: ToolDef, input: any, ctx: ToolCtx, cfg: PolicyConfig, opts: { approved?: boolean } = {}): PolicyDecision {
+  const d = evaluateRules(tool, input, ctx, cfg, opts);
+  // P10 — an injection attempt in the inbound message removes L1 autonomy for money actions.
+  const money = tool.kind === "act" && tool.name !== "send_message";
+  if (money && !opts.approved && ctx.rt.triageOf(ctx.kase.id)?.injection && (d.verdict === "ALLOW" || d.verdict === "SHADOW")) {
+    return { verdict: "NEEDS_APPROVAL", level: "L2", rules: [...d.rules, "P10"], reasons: [...d.reasons, "Inbound message contained instructions aimed at the agent; a human must confirm"] };
+  }
+  return d;
+}
+
+function evaluateRules(tool: ToolDef, input: any, ctx: ToolCtx, cfg: PolicyConfig, opts: { approved?: boolean }): PolicyDecision {
   const { kase, rt } = ctx;
 
   if (tool.kind === "read") return decide("ALLOW", "L0", ["P0"], ["Read-only"]);

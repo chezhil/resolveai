@@ -42,15 +42,15 @@ export default function App() {
 
   return (
     <div className="mx-auto max-w-[1600px] px-4 pb-10">
-      <header className="sticky top-0 z-30 -mx-4 mb-4 border-b-2 border-ink bg-cream/95 px-4 py-2.5 backdrop-blur">
+      <header className="z-30 -mx-4 mb-4 border-b-2 border-ink bg-cream/95 px-4 py-2.5 backdrop-blur lg:sticky lg:top-0">
         <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
           <Logo />
-          <nav className="flex flex-wrap gap-1">
+          <nav className="scroll-thin order-last -mx-1 flex w-full gap-1 overflow-x-auto px-1 lg:order-none lg:w-auto">
             {TABS.map((t) => (
               <button
                 key={t}
                 onClick={() => setTab(t)}
-                className={cx("cursor-pointer rounded-lg border-2 px-2.5 py-1 text-[13px] font-semibold", t === tab ? "border-ink bg-ink text-white" : "border-transparent hover:border-ink/30")}
+                className={cx("shrink-0 cursor-pointer whitespace-nowrap rounded-lg border-2 px-2.5 py-1 text-[13px] font-semibold", t === tab ? "border-ink bg-ink text-white" : "border-transparent hover:border-ink/30")}
               >
                 {t}
                 {t === "Cases & approvals" && pending > 0 && <span className="ml-1 rounded-full bg-rose px-1.5 text-[11px] text-ink">{pending}</span>}
@@ -114,9 +114,9 @@ function Logo() {
     <div className="flex items-center gap-2">
       <span className="grid h-8 w-8 place-items-center rounded-lg border-2 border-ink bg-sun font-bold shadow-[2px_2px_0_#121633]">✓</span>
       <span className="font-display text-xl font-extrabold tracking-tight">ResolveAI</span>
-      <Pill tone="brand" className="hidden sm:inline-flex">
-        Track 3 · Autonomous AI teammate
-      </Pill>
+      <span className="hidden md:block">
+        <Pill tone="brand">Track 3 · Autonomous AI teammate</Pill>
+      </span>
     </div>
   );
 }
@@ -143,9 +143,10 @@ function MetricsStrip({ snap }: { snap: import("./lib/api").Snapshot }) {
     ["Escalated w/ case file", m.escalated, "bg-ember"],
     ["Proactive", m.proactive, "bg-sky"],
     ["Missed deadlines", m.missedDisputeDeadlines, "bg-white"],
+    ["Merchant CSAT", m.csat ? `${m.csat}★` : "—", "bg-white"],
   ] as const;
   return (
-    <div className="mb-4 grid grid-cols-2 gap-2 sm:grid-cols-4 xl:grid-cols-8">
+    <div className="mb-4 grid grid-cols-3 gap-2 sm:grid-cols-5 xl:grid-cols-9">
       {items.map(([k, v, tone]) => (
         <div key={k} className={cx("rounded-xl border-2 border-ink px-3 py-1.5", tone)}>
           <div className="font-display text-xl font-extrabold leading-tight">{v}</div>
