@@ -6,6 +6,8 @@ An autonomous customer-service teammate for Paytm merchants and customers. It di
 
 > Paytm Build for India AI Hackathon, Bengaluru · **Track 3: Autonomous AI Teammates** · Team **TACO-HUNTERS** (Saksham Singh, Hamza Shaikh, Chezhil S)
 
+**▶ Live demo: [resolveai-production-99b1.up.railway.app](https://resolveai-production-99b1.up.railway.app)** (no login; every visitor gets their own sandbox)
+
 [![Deploy to Render](https://render.com/images/deploy-to-render-button.svg)](https://render.com/deploy?repo=https://github.com/chezhil/resolveai) &nbsp; ![CI](https://github.com/chezhil/resolveai/actions/workflows/ci.yml/badge.svg)
 
 ![ResolveAI resolving Manjunath's ₹480: Kannada voice note → ledger + Paytm PG + bank + UDIR diagnosis → L1 push-credit ticket → exact-time reply in Kannada → watcher fires next morning → verified and closed](docs/media/demo.gif)
