@@ -14,6 +14,8 @@ An autonomous customer-service teammate for Paytm merchants and customers. It di
 
 ---
 
+> **Taking over the project?** Start with [docs/HANDOFF.md](docs/HANDOFF.md): status, architecture, how to change the frontend and backend, deployment, and what to do next.
+
 ## The problem
 
 > *Manjunath was paid. His soundbox stayed silent.* A customer shows a ₹480 debit. Manjunath sees nothing, and the breakfast queue keeps growing. Support tells him to raise a ticket and wait for a callback.
