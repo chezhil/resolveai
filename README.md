@@ -44,7 +44,7 @@ ResolveAI owns the case from **first signal to confirmed closure**:
 | ![L2 approval](docs/media/03-l2-approval.png) | ![Guardrail escalation](docs/media/04-guardrail-escalation.png) |
 | **L2:** penny-drop clears the blocker, then one-click human approval | **L3:** PII redacted, payout change blocked by policy, fraud desk gets the case file |
 | ![Evals](docs/media/05-evals.png) | ![Audit tamper](docs/media/06-audit-tamper.png) |
-| **28/28 golden cases, incl. 11 red-team attacks** + shadow replay against human decisions | **Anchored audit log:** even a full re-hash of the chain contradicts the published anchors |
+| **32/32 golden cases, incl. 11 red-team attacks** + shadow replay against human decisions | **Anchored audit log:** even a full re-hash of the chain contradicts the published anchors |
 
 ## Run it
 
@@ -89,7 +89,7 @@ The full script is in [docs/DEMO.md](docs/DEMO.md).
 4. **D · "Change my payout account, urgent."** PII is redacted before the model sees it (`<ACCOUNT_1>`, `<PHONE_1>`). Policy **P1 blocks** the change, the SIM-swap risk flag forces L3, and the fraud desk gets a complete case file.
 5. **E · Proactive.** A stuck ₹2,350 payment is detected on the event stream after 10 minutes, and the merchant hears from us before they complain.
 6. Toggle **Model outage**, then run any scenario: the case fails safe to the human queue with no half-finished actions.
-7. **Evals & shadow** tab: 28/28 golden cases, including 11 red-team attacks, plus the shadow replay. **Audit log** tab: **Tamper: rewrite chain** re-hashes the whole chain so it still "verifies", and the published anchors catch it anyway.
+7. **Evals & shadow** tab: 32/32 golden cases, including 11 red-team attacks, plus the shadow replay. **Audit log** tab: **Tamper: rewrite chain** re-hashes the whole chain so it still "verifies", and the published anchors catch it anyway.
 
 ## Architecture
 
@@ -166,8 +166,9 @@ npm test
 npm run eval
 ```
 
-- **28 golden cases** (workflows, guardrails, prompt injection, proactive, resilience, and 11 red-team attacks). Each one runs in a fresh, isolated simulated world and asserts on the **systems of record** (ledger credited, settlement UTR, dispute ack, payout account unchanged), not on the agent's text.
-- **Shadow replay** runs the agent with actions recorded but not executed on 14 historical tickets, scored against the action an ops reviewer marked as the right call. Current result: the **agent makes the right call on 93%, the human agents on 79%**, and the two agree on 79%. Six tickets are deliberately hard: an account takeover a human fell for, a refund that should have been a push credit, a ticket raised for a payment that didn't exist. The one miss is a **known gap**: there's no duplicate-debit workflow yet, so the agent escalates safely instead of refunding. The tickets are synthetic stand-ins for the anonymised set we'd request from Paytm.
+- New here? Read [docs/NEXT_TEAMMATE.md](docs/NEXT_TEAMMATE.md) first, then [docs/HANDOFF.md](docs/HANDOFF.md).
+- **32 golden cases** (workflows, guardrails, prompt injection, proactive, resilience, and 11 red-team attacks). Each one runs in a fresh, isolated simulated world and asserts on the **systems of record** (ledger credited, settlement UTR, dispute ack, payout account unchanged), not on the agent's text.
+- **Shadow replay** runs the agent with actions recorded but not executed on 14 historical tickets, scored against the action an ops reviewer marked as the right call. Current result: the **agent makes the right call on 100%, the human agents on 79%**, and the two agree on 86%. Six tickets are deliberately hard: an account takeover a human fell for, a refund that should have been a push credit, a ticket raised for a payment that didn't exist. The last gap, duplicate debits, is closed by the duplicate-debit workflow (policy P14: refund only the later of two identical credited payments from one payer). The tickets are synthetic stand-ins for the anonymised set we'd request from Paytm.
 - `npm run eval -- --llm` runs the same golden cases against Groq/Gemini.
 - CI ([.github/workflows/ci.yml](.github/workflows/ci.yml)) typechecks and runs tests and evals on every push.
 

@@ -61,6 +61,8 @@ export class PlannerBrain implements Brain {
     switch (this.kase.workflow) {
       case "failed_payment":
         return this.failedPayment(m, ev);
+      case "duplicate_debit":
+        return this.duplicateDebit(m, ev);
       case "settlement_hold":
         return this.settlement(m, ev);
       case "dispute":
@@ -159,6 +161,64 @@ export class PlannerBrain implements Brain {
           this.call("close_case", {
             resolution_summary: `₹${this.data.amount} (RRN ${this.data.rrn}) credited after push-credit ticket; merchant and payer informed.`,
             root_cause: "Beneficiary bank CBS timeout after payer debit",
+          }),
+        ]);
+      }
+      default:
+        return this.turn("Nothing further.", []);
+    }
+  }
+
+  private duplicateDebit(m: string, ev?: { data?: Record<string, unknown> }): BrainTurn {
+    switch (this.phase) {
+      case "start": {
+        this.phase = "match";
+        const tri = this.rt.triageOf(this.kase.id);
+        return this.turn("Merchant says a customer was debited twice for one bill. Check the ledger for two identical payments, not the customer's word.", [
+          this.call("lookup_merchant", { merchant_id: m }),
+          this.call("search_transactions", { merchant_id: m, since_minutes: 180, ...(tri?.amount ? { amount: tri.amount } : {}) }),
+          this.call("search_sop", { query: "duplicate debit customer charged twice refund the later payment" }),
+        ]);
+      }
+      case "match": {
+        const txns: Out[] = this.results.get("search_transactions")?.transactions ?? [];
+        const ok = (t: Out) => t.payer_debit === "SUCCESS" && t.merchant_credit === "SUCCESS";
+        const later = txns.find((t) =>
+          ok(t) && txns.some((o) => o !== t && ok(o) && o.payer_vpa === t.payer_vpa && o.amount === t.amount && Date.parse(o.time) <= Date.parse(t.time) && Date.parse(t.time) - Date.parse(o.time) <= 15 * 60_000),
+        );
+        if (!later) return this.escalate("No duplicate pair in the ledger", "The ledger shows no two identical credited payments from one payer", "Ask the customer for both UPI references", "low");
+        this.data.amount = later.amount;
+        this.data.txn = later.txn_id;
+        this.data.rrn = later.rrn;
+        this.phase = "refund";
+        return this.turn(`Ledger confirms two identical ₹${later.amount} payments from ${later.payer_vpa} minutes apart, both credited. Refund only the later one (${later.txn_id}).`, [
+          this.call("initiate_refund", { txn_id: later.txn_id, amount: later.amount, reason: "Duplicate debit: identical payment from the same payer within 15 minutes" }),
+        ]);
+      }
+      case "refund": {
+        if (this.errors.has("initiate_refund")) return this.escalate("Refund of the duplicate was not permitted", "Duplicate debit could not be auto-refunded", "Review the two payments and refund manually");
+        const r = this.results.get("initiate_refund");
+        if (r?.status === "PENDING_APPROVAL") {
+          this.phase = "await";
+          return this.turn("Above the L1 refund cap, so it's in the approval queue. Tell the merchant what happens next.", [this.msg("duplicatePending", { amount: this.data.amount })]);
+        }
+        this.phase = "notify";
+        return this.duplicateDebit(m, ev);
+      }
+      case "await": {
+        if (ev?.data?.type !== "APPROVAL_DECIDED") return this.turn("Waiting for approval.", []);
+        if (ev.data.decision !== "APPROVED") return this.escalate("Ops lead rejected the duplicate refund", "Duplicate debit", "Review the two payments manually");
+        this.phase = "notify";
+        return this.duplicateDebit(m, ev);
+      }
+      case "notify": {
+        this.phase = "done";
+        return this.turn("Refund executed. Tell both sides and close with verification.", [
+          this.msg("duplicateMerchant", { amount: this.data.amount }),
+          this.msg("duplicatePayer", { amount: this.data.amount, business: this.rt.world.merchants.get(m)?.business ?? "the merchant" }, "payer"),
+          this.call("close_case", {
+            resolution_summary: `Duplicate debit of ₹${this.data.amount} (${this.data.txn}) refunded to the payer; the earlier payment stands.`,
+            root_cause: "Payer double-tapped pay; two identical payments reached the merchant",
           }),
         ]);
       }

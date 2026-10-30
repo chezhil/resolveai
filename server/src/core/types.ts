@@ -3,7 +3,7 @@
 export type Lang = "kn" | "hi" | "en";
 export type Channel = "whatsapp" | "in-app" | "ivr" | "soundbox" | "event";
 export type Level = "L0" | "L1" | "L2" | "L3";
-export type Workflow = "failed_payment" | "settlement_hold" | "dispute" | "account_change" | "unknown";
+export type Workflow = "failed_payment" | "duplicate_debit" | "settlement_hold" | "dispute" | "account_change" | "unknown";
 
 export type CaseStatus =
   | "OPEN"

@@ -16,6 +16,11 @@ export interface Triage {
 const RULES: { wf: Workflow; re: RegExp; signal: string }[] = [
   { wf: "account_change", re: /(change|update|new|badal|switch).{0,40}(account|bank|ifsc|payout)|(account|bank).{0,20}(change|update|badal)/i, signal: "payout-account change request" },
   { wf: "dispute", re: /charge ?back|dispute|claim(ed)? .*not received|representation/i, signal: "chargeback / dispute" },
+  {
+    wf: "duplicate_debit",
+    re: /(debited|deducted|charged|paid|kat(?:a|e)?).{0,40}(twice|two times|2 times|double|2x)|(twice|two times|double|dobara|do baar|2 baar|eradu bari).{0,30}(debit|deduct|charge|paid|payment|kat)|duplicate (debit|payment|charge)|double (debit|charge|payment)/i,
+    signal: "duplicate debit for one bill",
+  },
   { wf: "settlement_hold", re: /settlement|payout|ruka|hold|settle/i, signal: "settlement not received" },
   { wf: "failed_payment", re: /soundbox|sound box|paid|pay maad|maadidru|debit|deduct|not credit|helilla|kat gaya|payment|ಪಾವತಿ|ಹಣ|पेमेंट|पैसा/i, signal: "paid but not received" },
 ];

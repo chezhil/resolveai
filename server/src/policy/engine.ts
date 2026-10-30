@@ -38,6 +38,7 @@ export const MONEY_TOOLS = ["raise_bank_ticket", "initiate_refund", "release_set
 /** P11: action tools each workflow may use. Read tools are always allowed. */
 export const WORKFLOW_TOOLS: Record<string, string[]> = {
   failed_payment: ["raise_bank_ticket", "initiate_refund", "send_message"],
+  duplicate_debit: ["initiate_refund", "send_message"],
   settlement_hold: ["release_settlement_hold", "send_message"],
   dispute: ["file_dispute_evidence", "send_message"],
   account_change: ["send_message"],
@@ -59,7 +60,10 @@ export const RULES: Record<string, string> = {
   P11: "Least privilege: each workflow may only use the action tools it needs.",
   P12: "Velocity: too many money actions for one merchant in 24 hours goes to a human.",
   P13: "Two-person rule: approvals above ₹1,00,000 need two different humans; nobody approves twice.",
+  P14: "Duplicate debit: refund only the later of two identical, credited payments from the same payer within 15 minutes, both seen in this case's ledger lookup.",
 };
+
+const DUPLICATE_WINDOW_MS = 15 * 60_000;
 
 const decide = (verdict: PolicyDecision["verdict"], level: Level, rules: string[], reasons: string[]): PolicyDecision => ({
   verdict,
@@ -141,6 +145,26 @@ function evaluateRules(tool: ToolDef, input: any, ctx: ToolCtx, cfg: PolicyConfi
     if (!txn || !known) return decide("BLOCK", "L1", ["P3"], ["Transaction not confirmed by a ledger lookup in this case"]);
     if (txn.beneficiaryCredit === "REVERSED") return decide("BLOCK", "L1", ["P9"], ["Already reversed to payer"]);
     if (!(amount > 0) || amount > txn.amount) return decide("BLOCK", "L1", ["P3"], [`Refund ₹${amount} exceeds transaction ₹${txn.amount}`]);
+    if (kase.workflow === "duplicate_debit") {
+      const earlier = [...rt.world.txns.values()].find(
+        (o) =>
+          o.txnId !== txn.txnId &&
+          o.merchantId === txn.merchantId &&
+          o.payerVpa === txn.payerVpa &&
+          o.amount === txn.amount &&
+          o.payerDebit === "SUCCESS" &&
+          o.beneficiaryCredit === "SUCCESS" &&
+          Math.abs(txn.ts - o.ts) <= DUPLICATE_WINDOW_MS &&
+          (o.ts < txn.ts || (o.ts === txn.ts && o.txnId < txn.txnId)) &&
+          fact(kase, `txn:${o.rrn}`),
+      );
+      if (txn.beneficiaryCredit !== "SUCCESS" || !earlier) {
+        return decide("BLOCK", "L1", ["P14"], ["Not a confirmed duplicate: needs an earlier credited payment of the same amount from the same payer within 15 minutes, both seen in this case's ledger lookup"]);
+      }
+      if (amount !== txn.amount) return decide("BLOCK", "L1", ["P14"], [`A duplicate refund must be the full ₹${txn.amount} of the later payment`]);
+      const d = tier(amount, cfg.l1RefundCap, cfg, opts.approved, "duplicate-debit refund");
+      return { ...d, rules: [...d.rules, "P14"] };
+    }
     return tier(amount, cfg.l1RefundCap, cfg, opts.approved, "refund");
   }
 

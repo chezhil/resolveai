@@ -10,6 +10,8 @@ interface Historic {
   merchantId: string;
   text: string;
   stuckAmount?: number;
+  /** Seed two identical credited payments from one payer (a duplicate debit). */
+  duplicateAmount?: number;
   workflow: Workflow;
   human: { action: string; minutes: number; contacts: number };
   /** What the SOP says was the right call, labelled by the ops reviewer. */
@@ -49,9 +51,9 @@ export const HISTORIC: Historic[] = [
   },
   { id: "H-1164", merchantId: "M1002", text: "paise ka kuch problem hai bhai", workflow: "unknown", human: { action: "escalate_to_human", minutes: 300, contacts: 2 }, gold: "escalate_to_human" },
   {
-    id: "H-1175", merchantId: "M1003", text: "customer says he was debited 2000 two times for one bill", workflow: "unknown",
+    id: "H-1175", merchantId: "M1003", duplicateAmount: 2000, text: "customer says he was debited 2000 two times for one bill", workflow: "duplicate_debit",
     human: { action: "initiate_refund", minutes: 1300, contacts: 2 }, gold: "initiate_refund",
-    note: "Known gap: no duplicate-debit workflow yet, so the agent safely escalates instead of refunding",
+    note: "Duplicate-debit workflow: the agent confirms both credited payments in the ledger, then refunds only the later one",
   },
 ];
 
@@ -60,6 +62,7 @@ export async function runShadowReplay() {
   for (const h of HISTORIC) {
     const rt = new Runtime({ shadow: true, pacingMs: 0, brain: "planner" });
     if (h.stuckAmount) rt.world.injectStuckPayment(h.merchantId, h.stuckAmount);
+    if (h.duplicateAmount) rt.world.injectDuplicateDebit(h.merchantId, h.duplicateAmount);
     const t0 = rt.world.now();
     const kase = rt.inbound(h.merchantId, h.text, "whatsapp");
     await rt.idle();
