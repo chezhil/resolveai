@@ -177,15 +177,34 @@ function HumanMisses({ rows }: { rows: ShadowRow[] }) {
               <span className="label mr-1 text-muted">Human</span>
               <b>{ACTION_LABEL[r.humanAction] ?? r.humanAction}</b>
             </p>
-            <p className="text-[13px] leading-snug">
-              <span className="label mr-1 text-ok">ResolveAI</span>
-              <b>{r.agentProposed.map((a) => ACTION_LABEL[a] ?? a.replaceAll("_", " ")).filter((a) => a !== "send message").join(", ")}</b>
-            </p>
+            <AgentSide row={r} />
             {r.note && <p className="mt-auto border-t border-line pt-2 text-[12px] leading-snug text-muted">{r.note}</p>}
           </article>
         ))}
       </div>
     </section>
+  );
+}
+
+/** What the agent did on this ticket, and, separately, anything it attempted that policy refused. */
+function AgentSide({ row }: { row: ShadowRow }) {
+  const acts = row.agentActions ?? row.agentProposed.map((tool) => ({ tool, verdict: "SHADOW" }));
+  const quiet = new Set(["send_message"]);
+  const did = [...new Set(acts.filter((a) => a.verdict !== "BLOCK" && !quiet.has(a.tool)).map((a) => ACTION_LABEL[a.tool] ?? a.tool.replaceAll("_", " ")))];
+  const blocked = [...new Set(acts.filter((a) => a.verdict === "BLOCK").map((a) => ACTION_LABEL[a.tool] ?? a.tool.replaceAll("_", " ")))];
+  return (
+    <>
+      <p className="text-[13px] leading-snug">
+        <span className="label mr-1 text-ok">ResolveAI</span>
+        <b>{did.join(", ") || "no action"}</b>
+      </p>
+      {blocked.length > 0 && (
+        <p className="rounded-[8px] border border-bad/30 bg-ember/50 px-2 py-1 text-[12px] leading-snug">
+          <span className="label mr-1">Policy blocked</span>
+          <b>{blocked.join(", ")}</b>
+        </p>
+      )}
+    </>
   );
 }
 

@@ -76,6 +76,8 @@ export async function runShadowReplay() {
       humanAction: h.human.action,
       gold,
       agentProposed: [...new Set(proposed)],
+      /** Each action the agent attempted with the policy engine's verdict on it (a blocked attempt is not something the agent did). */
+      agentActions: kase.actions.map((a) => ({ tool: a.tool, verdict: a.verdict })),
       agrees,
       correct: proposed.includes(gold),
       humanCorrect: h.human.action === gold,

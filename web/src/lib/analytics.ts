@@ -27,6 +27,8 @@ export interface ShadowRow {
   humanAction: string;
   gold: string;
   agentProposed: string[];
+  /** Every attempted action with the policy verdict on it; a BLOCK means the agent tried and policy refused. */
+  agentActions?: { tool: string; verdict: string }[];
   agrees: boolean;
   correct: boolean;
   humanCorrect: boolean;
@@ -114,6 +116,7 @@ export const ACTION_LABEL: Record<string, string> = {
   escalate_to_human: "escalated with a case file",
   update_payout_account: "changed the payout account",
   initiate_refund: "refunded the payer",
+  set_watcher: "set a watcher on the money",
 };
 
 // ---- proof: what the replay and the golden suite say ----
