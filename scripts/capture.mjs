@@ -18,13 +18,25 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
 async function open(room, viewport = { width: 1480, height: 940 }) {
   const page = await browser.newPage({ viewport, deviceScaleFactor: 1 });
-  await page.goto(`${BASE}/?room=${room}-${Date.now().toString(36)}`);
+  const id = `${room}-${Date.now().toString(36)}`;
+  await page.goto(`${BASE}/app?room=${id}`);
   await page.getByText("Demo scenarios").waitFor();
+  // Pin the deterministic planner so shots never depend on API keys in the environment.
+  await page.getByLabel("Brain").selectOption("planner", { timeout: 3000 }).catch(() => {}); // hidden at phone width; no keys means planner anyway
+  page.roomId = id;
   return page;
 }
+const go = async (page, path) => {
+  await page.goto(`${BASE}/app${path}?room=${page.roomId}`);
+  await sleep(900);
+};
 const scenario = (page, title) => page.getByRole("button", { name: new RegExp(title) }).first().click();
 const clock = (page, label) => page.getByRole("button", { name: label, exact: true }).first().click();
-const shot = (page, name, opts = {}) => page.screenshot({ path: `${OUT}${name}.png`, ...opts });
+const shot = async (page, name, opts = {}) => {
+  // The console header is sticky; in a full-page shot it would repeat mid-page.
+  if (opts.fullPage) await page.addStyleTag({ content: "header{position:static !important}" });
+  return page.screenshot({ path: `${OUT}${name}.png`, ...opts });
+};
 
 // 1. Workflow A, with a GIF of the whole loop.
 {
@@ -71,8 +83,8 @@ const shot = (page, name, opts = {}) => page.screenshot({ path: `${OUT}${name}.p
 {
   const page = await open("cap-b");
   await scenario(page, "Priya");
-  await page.getByRole("button", { name: "Approve as Ops lead" }).waitFor({ timeout: 20000 });
-  await page.getByRole("button", { name: "Approve as Ops lead" }).click();
+  await page.getByRole("button", { name: /Approve as/ }).first().waitFor({ timeout: 20000 });
+  await page.getByRole("button", { name: /Approve as/ }).first().click();
   await sleep(600);
   await shot(page, "03-l2-approval");
   await page.close();
@@ -91,7 +103,7 @@ const shot = (page, name, opts = {}) => page.screenshot({ path: `${OUT}${name}.p
 // 4. Evals.
 {
   const page = await open("cap-e");
-  await page.getByRole("button", { name: "Evals & shadow" }).click();
+  await go(page, "/evals");
   await page.getByRole("button", { name: "Run with offline planner" }).click();
   await page.getByText("golden cases passed").waitFor({ timeout: 60000 });
   await sleep(500);
@@ -104,11 +116,21 @@ const shot = (page, name, opts = {}) => page.screenshot({ path: `${OUT}${name}.p
   const page = await open("cap-f");
   await scenario(page, "Arjun");
   await page.getByText("Verified & closed").first().waitFor({ timeout: 20000 });
-  await page.getByRole("button", { name: "Audit log" }).click();
+  await go(page, "/audit");
   await page.getByRole("button", { name: "Tamper: rewrite chain" }).click();
   await page.getByText(/contradicted/).waitFor();
   await sleep(400);
   await shot(page, "06-audit-tamper");
+  await page.close();
+}
+
+// 5b. Analytics and proof, filled by running every demo scenario.
+{
+  const page = await open("cap-g", { width: 1480, height: 940 });
+  await go(page, "/analytics");
+  await page.getByRole("button", { name: "Run all demo scenarios" }).click();
+  await sleep(12000);
+  await shot(page, "08-analytics", { fullPage: true });
   await page.close();
 }
 

@@ -1,5 +1,5 @@
 import { chromium } from "playwright-core";
-const b = await chromium.launch({ executablePath: "C:/Program Files/Google/Chrome/Application/chrome.exe", headless: true });
+const b = await chromium.launch({ executablePath: process.env.CHROME_PATH ?? "C:/Program Files/Google/Chrome/Application/chrome.exe", headless: true });
 const p = await b.newPage({ viewport: { width: 1440, height: 900 } });
 await p.goto(process.argv[2] ?? "http://localhost:5173/");
 await p.waitForTimeout(1500);
