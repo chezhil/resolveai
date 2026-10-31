@@ -361,7 +361,7 @@ const RAW_TOOLS: ToolDef[] = [
   {
     name: "initiate_refund",
     kind: "act",
-    description: "Refund a payer for a specific transaction. Small refunds auto-approve; larger ones go to the human approval queue.",
+    description: "Refund a payer for a specific transaction. Small refunds auto-approve; larger ones go to the human approval queue. For a duplicate debit, refund only the later of the two identical payments, for its full amount (policy P14).",
     schema: obj(
       { txn_id: str("Transaction id"), amount: num("Refund amount in rupees"), reason: str("Why") },
       ["txn_id", "amount", "reason"],
