@@ -1,18 +1,33 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import type { Snapshot } from "../lib/api";
 import { api } from "../lib/api";
+import { usePinRequired } from "../lib/meta";
 import { Button, SectionLabel, cx } from "./ui";
 
 interface Step {
   title: string;
   caption: string;
   action: string;
-  run: (snap: Snapshot) => Promise<unknown>;
+  run: (snap: Snapshot, pinRequired: boolean) => Promise<unknown>;
+  /** Label when approver PINs are enforced and a human has to sign on the approval card. */
+  pinAction?: string;
+  pinCaption?: string;
 }
 
-const approvePending = async (snap: Snapshot) => {
+const STEP_KEY = "resolveai-demo-step";
+const readStep = () => {
+  try {
+    return Number(sessionStorage.getItem(STEP_KEY) ?? 0) || 0;
+  } catch {
+    return 0;
+  }
+};
+
+const approvePending = async (snap: Snapshot, pinRequired: boolean) => {
   const pending = snap.approvals.find((a) => a.status === "PENDING");
   if (!pending) return;
+  // With real approver PINs the guide can't sign for anyone: the humans do it on the approval card.
+  if (pinRequired) throw new Error("Still waiting: two different approvers must enter their PINs on the approval card in the case file.");
   const approvers = ["ops-lead", "risk-lead"].slice(0, pending.required);
   for (const by of approvers) await api(`/approvals/${pending.id}`, { decision: "APPROVED", by });
 };
@@ -40,6 +55,8 @@ const STEPS: Step[] = [
     title: "Two-person rule",
     caption: "Above Rs 1 L, two different people must approve. One person cannot approve twice.",
     action: "Approve as ops-lead + risk-lead",
+    pinAction: "Both signed, continue",
+    pinCaption: "Above Rs 1 L, two different people must approve. Each approver enters their own PIN on the approval card; the server ties the signature to the PIN.",
     run: approvePending,
   },
   {
@@ -57,16 +74,24 @@ const STEPS: Step[] = [
 ];
 
 export function DemoGuide({ snap }: { snap: Snapshot }) {
-  const [i, setI] = useState(0);
+  const pinRequired = usePinRequired();
+  const [i, setI] = useState(() => Math.min(readStep(), STEPS.length - 1));
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const step = STEPS[i];
+  useEffect(() => {
+    try {
+      sessionStorage.setItem(STEP_KEY, String(i));
+    } catch {
+      // per-tab convenience only
+    }
+  }, [i]);
 
   const go = async () => {
     setBusy(true);
     setError("");
     try {
-      await step.run(snap);
+      await step.run(snap, pinRequired);
       if (i < STEPS.length - 1) setI(i + 1);
     } catch (e) {
       setError(e instanceof Error ? e.message : "Step failed");
@@ -81,17 +106,23 @@ export function DemoGuide({ snap }: { snap: Snapshot }) {
         Guided demo · step {i + 1} of {STEPS.length}
       </SectionLabel>
       <div className="font-display text-base font-extrabold leading-tight">{step.title}</div>
-      <p className="mt-1 text-[12.5px] leading-snug">{step.caption}</p>
+      <p className="mt-1 text-[12.5px] leading-snug">{pinRequired && step.pinCaption ? step.pinCaption : step.caption}</p>
       <div className="mt-2 flex flex-wrap items-center gap-2">
         <Button tone="brand" size="sm" disabled={busy} onClick={go}>
-          {step.action}
+          {pinRequired && step.pinAction ? step.pinAction : step.action}
         </Button>
         <Button size="sm" disabled={i === 0} onClick={() => setI(i - 1)}>
           Back
         </Button>
-        <Button size="sm" disabled={i === STEPS.length - 1} onClick={() => setI(i + 1)}>
-          Skip
-        </Button>
+        {i === STEPS.length - 1 ? (
+          <Button size="sm" onClick={() => setI(0)}>
+            Restart
+          </Button>
+        ) : (
+          <Button size="sm" onClick={() => setI(i + 1)}>
+            Skip
+          </Button>
+        )}
       </div>
       <div className="mt-2 flex gap-1" aria-hidden>
         {STEPS.map((s, n) => (

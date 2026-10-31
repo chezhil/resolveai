@@ -2,6 +2,7 @@ import { useState } from "react";
 import type { Approval, Case, Level, Watcher } from "../lib/api";
 import { api, fmtMs, fmtTime, rupees } from "../lib/api";
 import { Button, Empty, LEVEL_NAME, Pill, SectionLabel, StatusBadge, cx } from "./ui";
+import { usePinRequired } from "../lib/meta";
 
 const LEVELS: Level[] = ["L0", "L1", "L2", "L3"];
 const RANK: Record<Level, number> = { L0: 0, L1: 1, L2: 2, L3: 3 };
@@ -139,9 +140,29 @@ const APPROVERS = [
 ];
 
 export function ApprovalCard({ a }: { a: Approval }) {
+  const pinRequired = usePinRequired();
   const [err, setErr] = useState("");
-  const act = (decision: "APPROVED" | "REJECTED", by: string) => api(`/approvals/${a.id}`, { decision, by }).catch((e) => setErr((e as Error).message));
+  const [pin, setPin] = useState("");
+  const [busy, setBusy] = useState(false);
   const signed = new Set(a.approvals.map((x) => x.by));
+
+  const act = async (decision: "APPROVED" | "REJECTED", by?: string) => {
+    if (pinRequired && !pin.trim()) {
+      setErr("Enter your approver PIN first");
+      return;
+    }
+    setBusy(true);
+    setErr("");
+    try {
+      await api(`/approvals/${a.id}`, pinRequired ? { decision, pin: pin.trim() } : { decision, by });
+      setPin("");
+    } catch (e) {
+      setErr((e as Error).message);
+    } finally {
+      setBusy(false);
+    }
+  };
+
   return (
     <div className="card rise bg-rose/30 p-3">
       <SectionLabel right={<Pill tone="rose">L2{a.required > 1 ? " · two-person" : ""}</Pill>}>One-click approval · {a.id}</SectionLabel>
@@ -151,7 +172,7 @@ export function ApprovalCard({ a }: { a: Approval }) {
       <div className="mt-1 text-[12.5px] text-muted">{a.rationale}</div>
       <div className="mt-1 break-all font-mono text-[11px]">{JSON.stringify(a.input)}</div>
       {a.required > 1 && (
-        <div className="mt-2 flex items-center gap-2 text-[12px]">
+        <div className="mt-2 flex flex-wrap items-center gap-2 text-[12px]">
           <span className="font-semibold">
             Signatures {a.approvals.length}/{a.required}
           </span>
@@ -162,17 +183,56 @@ export function ApprovalCard({ a }: { a: Approval }) {
           ))}
         </div>
       )}
-      <div className="mt-2.5 flex flex-wrap gap-2">
-        {(a.required > 1 ? APPROVERS : APPROVERS.slice(0, 1)).map((p) => (
-          <Button key={p.id} tone="mint" disabled={signed.has(p.id)} onClick={() => act("APPROVED", p.id)}>
-            {a.required > 1 ? `Approve as ${p.label}` : "Approve"}
+      {pinRequired ? (
+        <form
+          className="mt-2.5 flex flex-wrap items-end gap-2"
+          onSubmit={(e) => {
+            e.preventDefault();
+            void act("APPROVED");
+          }}
+        >
+          <label className="flex min-w-0 flex-col gap-1">
+            <span className="label text-muted">Approver PIN</span>
+            <input
+              type="password"
+              inputMode="numeric"
+              autoComplete="off"
+              maxLength={64}
+              value={pin}
+              onChange={(e) => setPin(e.target.value)}
+              aria-label={`Approver PIN for ${a.id}`}
+              className="chunky w-36 rounded-xl bg-white px-2.5 py-1.5 font-mono text-sm"
+              placeholder="••••••"
+            />
+          </label>
+          <Button type="submit" tone="mint" disabled={busy}>
+            {a.required > 1 ? `Sign (${a.approvals.length + 1} of ${a.required})` : "Approve"}
           </Button>
-        ))}
-        <Button tone="white" onClick={() => act("REJECTED", "ops-lead")}>
-          Reject
-        </Button>
-      </div>
-      {err && <div className="mt-2 text-[12px] text-ember">{err}</div>}
+          <Button type="button" tone="white" disabled={busy} onClick={() => act("REJECTED")}>
+            Reject
+          </Button>
+          <p className="w-full text-[11px] text-muted">Your PIN identifies you on the server. {a.required > 1 ? "A second, different approver must sign too." : ""}</p>
+        </form>
+      ) : (
+        <>
+          <div className="mt-2.5 flex flex-wrap gap-2">
+            {(a.required > 1 ? APPROVERS : APPROVERS.slice(0, 1)).map((p) => (
+              <Button key={p.id} tone="mint" disabled={busy || signed.has(p.id)} onClick={() => act("APPROVED", p.id)}>
+                {a.required > 1 ? `Approve as ${p.label}` : "Approve"}
+              </Button>
+            ))}
+            <Button tone="white" disabled={busy} onClick={() => act("REJECTED", "ops-lead")}>
+              Reject
+            </Button>
+          </div>
+          <p className="mt-2 text-[11px] font-semibold text-muted">Approver identity simulated: no approver PINs are set on this server.</p>
+        </>
+      )}
+      {err && (
+        <div role="alert" className="mt-2 text-[12px] font-semibold text-ember">
+          {err}
+        </div>
+      )}
     </div>
   );
 }

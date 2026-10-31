@@ -208,7 +208,7 @@ web/src
 | GET | `/api/cases/:id` | case + full trace + messages + approvals + watchers + audit |
 | POST | `/api/scenarios/:id` | run scenario A–F |
 | POST | `/api/inbound` | `{merchantId, text, channel?}` → `{caseId}`; 429 if rate-limited |
-| POST | `/api/approvals/:id` | `{decision: "APPROVED"\|"REJECTED", by: "ops-lead"\|"risk-lead"}` |
+| POST | `/api/approvals/:id` | `{decision: "APPROVED"\|"REJECTED", pin}` with approver PINs set; `{decision, by: "ops-lead"\|"risk-lead"}` when identity is simulated |
 | POST | `/api/cases/:id/csat` | `{score: 1–5}` (resolved cases only) |
 | POST | `/api/clock/advance` | `{minutes}` |
 | POST | `/api/config` | `{brain?: "auto"\|"llm"\|"planner", shadow?, chaosModelOutage?}` |
@@ -271,6 +271,8 @@ Colour meaning is consistent: **L0 sun, L1 sky, L2 rose, L3 ember**; stages HEAR
 | `DB_PATH` | SQLite archive path (default `data/resolveai.db`) |
 | `PACING_MS` | Delay between trace steps in the live console (default 450) |
 | `MAX_ROOMS`, `WRITE_RATE_PER_MIN` | Abuse limits for the public deploy |
+| `APPROVER_OPS_PIN`, `APPROVER_RISK_PIN` | Approver PINs (6+ digits). When set, `/api/approvals/:id` takes `{decision, pin}` and the approver is bound to the PIN (constant-time compare); unset = simulated identity, shown in the UI |
+| `APPROVAL_RATE_PER_MIN`, `TRUST_PROXY_HOPS`, `MAX_STREAMS_PER_IP` | Approval rate limit (10), proxy hops to trust for client IPs (1), open SSE streams per IP (30) |
 | `PORT` / `API_PORT` | Production port / dev API port (8787) |
 
 Locally: `.env` at the repo root. On Railway: `railway variables --service resolveai --set …` or the dashboard (that triggers a redeploy).

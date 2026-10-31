@@ -1,26 +1,53 @@
-import { useEffect, useState } from "react";
-import type { Meta } from "./lib/api";
-import { api, fmtMs } from "./lib/api";
+import { useEffect, useRef, useState } from "react";
+import { Navigate, Route, Routes } from "react-router";
+import type { Meta, Snapshot } from "./lib/api";
+import { api } from "./lib/api";
 import { useLive } from "./lib/store";
+import { MetaContext } from "./lib/meta";
 import { Console } from "./views/Console";
+import { Merchant } from "./views/Merchant";
+import { Approvals } from "./views/Approvals";
 import { Cases } from "./views/Cases";
 import { Evals } from "./views/Evals";
 import { Audit } from "./views/Audit";
 import { Impact } from "./views/Impact";
+import { MetricsStrip } from "./components/MetricsStrip";
+import { AppNavLink, useAppNavigate } from "./components/AppLink";
 import { Button, Pill, cx } from "./components/ui";
 
-const TABS = ["Console", "Cases & approvals", "Evals & shadow", "Audit log", "Impact"] as const;
-type Tab = (typeof TABS)[number];
+interface Page {
+  path: string;
+  label: string;
+  short: string;
+}
+
+const PAGES: Page[] = [
+  { path: "/", label: "Live console", short: "Console" },
+  { path: "/merchant", label: "Merchant phone", short: "Phone" },
+  { path: "/approvals", label: "Approvals", short: "Approvals" },
+  { path: "/cases", label: "Cases & archive", short: "Cases" },
+  { path: "/evals", label: "Evals & benchmarks", short: "Evals" },
+  { path: "/audit", label: "Audit log", short: "Audit" },
+  { path: "/impact", label: "Impact", short: "Impact" },
+];
 
 export default function App() {
   const { snap, traces, lastAnnouncement, connected, hydrate } = useLive();
-  const [tab, setTab] = useState<Tab>("Console");
   const [meta, setMeta] = useState<Meta | null>(null);
   const [selected, setSelected] = useState<string>();
+  const go = useAppNavigate();
 
   useEffect(() => {
     api<Meta>("/meta").then(setMeta).catch(() => {});
   }, []);
+
+  // Follow the newest case when one opens (only on change, so a case picked elsewhere stays selected).
+  const newest = snap?.cases[0]?.id;
+  const lastNewest = useRef<string | undefined>(undefined);
+  useEffect(() => {
+    if (newest && newest !== lastNewest.current) setSelected(newest);
+    lastNewest.current = newest;
+  }, [newest]);
 
   useEffect(() => {
     if (selected && !traces[selected]) hydrate(selected);
@@ -28,93 +55,151 @@ export default function App() {
 
   if (!snap) {
     return (
-      <div className="grid h-full place-items-center">
+      <div className="grid h-full place-items-center px-4">
         <div className="card p-6 text-center">
           <Logo />
-          <p className="mt-3 text-sm text-muted">{connected ? "Loading…" : "Connecting to the ResolveAI server on :8787…"}</p>
+          <p className="mt-3 text-sm text-muted">{connected ? "Loading…" : "Connecting to the ResolveAI server…"}</p>
         </div>
       </div>
     );
   }
 
+  const openCase = (id: string) => {
+    setSelected(id);
+    go("/");
+  };
+
+  return (
+    <MetaContext.Provider value={meta}>
+      <div className="mx-auto max-w-[1600px] px-4 pb-10">
+        <Header snap={snap} connected={connected} onReset={() => setSelected(undefined)} />
+        <main>
+          <Routes>
+            <Route
+              path="/"
+              element={
+                <>
+                  <MetricsStrip snap={snap} />
+                  <Console snap={snap} meta={meta} traces={traces} selected={selected} select={setSelected} />
+                </>
+              }
+            />
+            <Route path="/merchant" element={<Merchant snap={snap} meta={meta} live={lastAnnouncement} selected={selected} select={setSelected} />} />
+            <Route path="/approvals" element={<Approvals snap={snap} open={openCase} />} />
+            <Route path="/cases" element={<Cases snap={snap} open={openCase} />} />
+            <Route path="/evals" element={<Evals llmAvailable={snap.providers.length > 0} />} />
+            <Route path="/audit" element={<Audit version={snap.cases.reduce((s, c) => s + c.actions.length + c.steps, 0) + snap.approvals.length} />} />
+            <Route
+              path="/impact"
+              element={
+                <>
+                  <MetricsStrip snap={snap} />
+                  <Impact snap={snap} meta={meta} />
+                </>
+              }
+            />
+            <Route path="*" element={<Navigate to="/" replace />} />
+          </Routes>
+        </main>
+      </div>
+    </MetaContext.Provider>
+  );
+}
+
+function Header({ snap, connected, onReset }: { snap: Snapshot; connected: boolean; onReset: () => void }) {
+  const [controlsOpen, setControlsOpen] = useState(false);
   const pending = snap.approvals.filter((a) => a.status === "PENDING").length;
   const brainLabel = snap.brain === "llm" ? `LLM · ${snap.providers.join(" → ") || "no key"}` : "Offline planner";
 
   return (
-    <div className="mx-auto max-w-[1600px] px-4 pb-10">
-      <header className="z-30 -mx-4 mb-4 border-b-2 border-ink bg-cream/95 px-4 py-2.5 backdrop-blur lg:sticky lg:top-0">
-        <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
-          <Logo />
-          <nav className="scroll-thin order-last -mx-1 flex w-full gap-1 overflow-x-auto px-1 lg:order-none lg:w-auto">
-            {TABS.map((t) => (
-              <button
-                key={t}
-                onClick={() => setTab(t)}
-                className={cx("shrink-0 cursor-pointer whitespace-nowrap rounded-lg border-2 px-2.5 py-1 text-[13px] font-semibold", t === tab ? "border-ink bg-ink text-white" : "border-transparent hover:border-ink/30")}
-              >
-                {t}
-                {t === "Cases & approvals" && pending > 0 && <span className="ml-1 rounded-full bg-rose px-1.5 text-[11px] text-ink">{pending}</span>}
-              </button>
-            ))}
-          </nav>
-          <div className="ml-auto flex flex-wrap items-center gap-2">
-            <div className="chunky flex items-center gap-2 rounded-xl bg-white px-2.5 py-1">
-              <span className="label text-muted">Sim clock</span>
-              <span className="font-mono text-sm font-bold">{snap.nowLabel}</span>
-              <Button size="sm" tone="sun" onClick={() => api("/clock/advance", { minutes: 10 })}>
-                +10m
-              </Button>
-              <Button size="sm" tone="sun" onClick={() => api("/clock/advance", { minutes: 24 * 60 })}>
-                +1 day
-              </Button>
-            </div>
-            <select
-              value={snap.config.brain}
-              onChange={(e) => api("/config", { brain: e.target.value })}
-              className="chunky cursor-pointer rounded-xl bg-white px-2 py-1.5 text-[13px] font-semibold"
-              title="Which brain proposes actions. Policy, tools and verifier are the same either way."
-            >
-              <option value="auto">Brain: auto ({brainLabel})</option>
-              <option value="llm" disabled={!snap.providers.length}>
-                Brain: Groq → Gemini
-              </option>
-              <option value="planner">Brain: offline planner</option>
-            </select>
-            <Toggle on={snap.config.shadow} label="Shadow" onClick={() => api("/config", { shadow: !snap.config.shadow })} />
-            <Toggle on={snap.config.chaosModelOutage} label="Model outage" danger onClick={() => api("/config", { chaosModelOutage: !snap.config.chaosModelOutage })} />
-            <Button size="sm" onClick={() => api("/reset", {}).then(() => setSelected(undefined))}>
-              Reset
-            </Button>
-            <span title={connected ? "Live" : "Disconnected"} className={cx("h-2.5 w-2.5 rounded-full border border-ink", connected ? "bg-mint" : "bg-ember")} />
-          </div>
+    <header className="z-30 -mx-4 mb-4 border-b-2 border-ink bg-cream/95 px-4 py-2.5 backdrop-blur sticky top-0">
+      <div className="flex items-center gap-x-4 gap-y-2">
+        <Logo />
+        <span className="hidden whitespace-nowrap font-mono text-sm font-bold sm:inline lg:hidden">{snap.nowLabel}</span>
+        <span title={connected ? "Live" : "Disconnected"} className={cx("h-2.5 w-2.5 shrink-0 rounded-full border border-ink lg:hidden", connected ? "bg-mint" : "bg-ember")} />
+        <button
+          onClick={() => setControlsOpen(!controlsOpen)}
+          aria-expanded={controlsOpen}
+          aria-controls="sim-controls"
+          className="chunky ml-auto cursor-pointer rounded-xl bg-white px-2.5 py-1 text-[13px] font-semibold lg:hidden"
+        >
+          {controlsOpen ? "Close" : "Controls"}
+        </button>
+        <div id="sim-controls" className={cx("ml-auto hidden flex-wrap items-center gap-2 lg:flex")}>
+          <SimControls snap={snap} brainLabel={brainLabel} onReset={onReset} />
+          <span title={connected ? "Live" : "Disconnected"} className={cx("h-2.5 w-2.5 rounded-full border border-ink", connected ? "bg-mint" : "bg-ember")} />
         </div>
-      </header>
-
-      <MetricsStrip snap={snap} />
-
-      {tab === "Console" && <Console snap={snap} meta={meta} traces={traces} live={lastAnnouncement} selected={selected} select={setSelected} />}
-      {tab === "Cases & approvals" && (
-        <Cases
-          snap={snap}
-          open={(id) => {
-            setSelected(id);
-            setTab("Console");
-          }}
-        />
+      </div>
+      {controlsOpen && (
+        <div className="mt-2 flex flex-wrap items-center gap-2 lg:hidden">
+          <SimControls snap={snap} brainLabel={brainLabel} onReset={onReset} />
+        </div>
       )}
-      {tab === "Evals & shadow" && <Evals llmAvailable={snap.providers.length > 0} />}
-      {tab === "Audit log" && <Audit version={snap.cases.reduce((s, c) => s + c.actions.length + c.steps, 0) + snap.approvals.length} />}
-      {tab === "Impact" && <Impact snap={snap} meta={meta} />}
-    </div>
+      <nav aria-label="Pages" className="scroll-thin -mx-1 mt-2 flex gap-1 overflow-x-auto px-1 pb-0.5">
+        {PAGES.map((p) => (
+          <AppNavLink
+            key={p.path}
+            to={p.path}
+            end={p.path === "/"}
+            className={(active) =>
+              cx("flex shrink-0 items-center whitespace-nowrap rounded-lg border-2 px-2.5 py-1 text-[13px] font-semibold", active ? "border-ink bg-ink text-white" : "border-transparent hover:border-ink/30")
+            }
+          >
+            <span className="sm:hidden">{p.short}</span>
+            <span className="hidden sm:inline">{p.label}</span>
+            {p.path === "/approvals" && pending > 0 && (
+              <span className="ml-1 rounded-full bg-rose px-1.5 text-[11px] text-ink" aria-label={`${pending} pending`}>
+                {pending}
+              </span>
+            )}
+          </AppNavLink>
+        ))}
+      </nav>
+    </header>
+  );
+}
+
+function SimControls({ snap, brainLabel, onReset }: { snap: Snapshot; brainLabel: string; onReset: () => void }) {
+  return (
+    <>
+      <div className="chunky flex items-center gap-2 rounded-xl bg-white px-2.5 py-1">
+        <span className="label text-muted">Sim clock</span>
+        <span className="whitespace-nowrap font-mono text-sm font-bold sm:hidden lg:inline">{snap.nowLabel}</span>
+        <Button size="sm" tone="sun" onClick={() => api("/clock/advance", { minutes: 10 })}>
+          +10m
+        </Button>
+        <Button size="sm" tone="sun" onClick={() => api("/clock/advance", { minutes: 24 * 60 })}>
+          +1 day
+        </Button>
+      </div>
+      <select
+        value={snap.config.brain}
+        onChange={(e) => api("/config", { brain: e.target.value })}
+        aria-label="Brain"
+        className="chunky max-w-full cursor-pointer rounded-xl bg-white px-2 py-1.5 text-[13px] font-semibold"
+        title="Which brain proposes actions. Policy, tools and verifier are the same either way."
+      >
+        <option value="auto">Brain: auto ({brainLabel})</option>
+        <option value="llm" disabled={!snap.providers.length}>
+          Brain: Groq → Gemini
+        </option>
+        <option value="planner">Brain: offline planner</option>
+      </select>
+      <Toggle on={snap.config.shadow} label="Shadow" onClick={() => api("/config", { shadow: !snap.config.shadow })} />
+      <Toggle on={snap.config.chaosModelOutage} label="Model outage" danger onClick={() => api("/config", { chaosModelOutage: !snap.config.chaosModelOutage })} />
+      <Button size="sm" onClick={() => api("/reset", {}).then(onReset)}>
+        Reset
+      </Button>
+    </>
   );
 }
 
 function Logo() {
   return (
-    <div className="flex items-center gap-2">
+    <div className="flex shrink-0 items-center gap-2">
       <span className="grid h-8 w-8 place-items-center rounded-lg border-2 border-ink bg-sun font-bold shadow-[2px_2px_0_#121633]">✓</span>
       <span className="font-display text-xl font-extrabold tracking-tight">ResolveAI</span>
-      <span className="hidden md:block">
+      <span className="hidden xl:block">
         <Pill tone="brand">Track 3 · Autonomous AI teammate</Pill>
       </span>
     </div>
@@ -123,37 +208,15 @@ function Logo() {
 
 function Toggle({ on, label, onClick, danger }: { on: boolean; label: string; onClick: () => void; danger?: boolean }) {
   return (
-    <button onClick={onClick} className={cx("chunky flex cursor-pointer items-center gap-1.5 rounded-xl px-2 py-1.5 text-[13px] font-semibold", on ? (danger ? "bg-ember" : "bg-sky") : "bg-white")}>
+    <button
+      onClick={onClick}
+      aria-pressed={on}
+      className={cx("chunky flex cursor-pointer items-center gap-1.5 rounded-xl px-2 py-1.5 text-[13px] font-semibold", on ? (danger ? "bg-ember" : "bg-sky") : "bg-white")}
+    >
       <span className={cx("relative h-4 w-7 rounded-full border-2 border-ink", on ? "bg-ink" : "bg-sand")}>
         <span className={cx("absolute top-[1px] h-2.5 w-2.5 rounded-full bg-white transition-all", on ? "left-3" : "left-[1px]")} />
       </span>
       {label}
     </button>
-  );
-}
-
-function MetricsStrip({ snap }: { snap: import("./lib/api").Snapshot }) {
-  const m = snap.metrics;
-  const items = [
-    ["Cases", m.cases, "bg-white"],
-    ["Verified closed", m.resolved, "bg-mint"],
-    ["Auto-resolved", m.cases ? `${Math.round(m.autoResolveRate * 100)}%` : "—", "bg-sun"],
-    ["Watching money", m.watching, "bg-sun"],
-    ["Awaiting approval", m.awaitingApproval, "bg-rose"],
-    ["Escalated w/ case file", m.escalated, "bg-ember"],
-    ["Proactive", m.proactive, "bg-sky"],
-    ["Missed deadlines", m.missedDisputeDeadlines, "bg-white"],
-    ["Merchant CSAT", m.csat ? `${m.csat}★` : "—", "bg-white"],
-    ["First action p50 / p95", m.latency.firstActionP50 === null ? "—" : `${fmtMs(m.latency.firstActionP50)} / ${fmtMs(m.latency.firstActionP95)}`, "bg-sun"],
-  ] as const;
-  return (
-    <div className="mb-4 grid grid-cols-2 gap-2 sm:grid-cols-5 xl:grid-cols-10">
-      {items.map(([k, v, tone]) => (
-        <div key={k} className={cx("rounded-xl border-2 border-ink px-3 py-1.5", tone)}>
-          <div className="font-display text-xl font-extrabold leading-tight">{v}</div>
-          <div className="text-[11px] font-semibold leading-tight">{k}</div>
-        </div>
-      ))}
-    </div>
   );
 }
