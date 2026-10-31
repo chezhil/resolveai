@@ -7,7 +7,8 @@ BEFORE YOU RECORD
 - Browser window 1280x800 or bigger, zoom 100%
 - In the console, click Reset once
 - Model outage toggle: OFF
-- Skip the audit tamper button (it's switched off on the server)
+- Audit tamper demo is ON (DEMO_ENDPOINTS=1); it only
+  touches your own room
 - Speak a bit slower than feels natural
 
 
