@@ -141,14 +141,14 @@ function Header({ snap, connected, onReset }: { snap: Snapshot; connected: boole
           <SimControls snap={snap} brainLabel={brainLabel} onReset={onReset} />
         </div>
       )}
-      <nav aria-label="Pages" className="scroll-thin -mx-1 mt-2 flex gap-1 overflow-x-auto px-1 pb-0.5">
+      <nav aria-label="Pages" className="scroll-thin mt-2 flex w-max max-w-full gap-0.5 overflow-x-auto rounded-full border border-line bg-white p-0.5">
         {PAGES.map((p) => (
           <AppNavLink
             key={p.path}
             to={p.path}
             end={p.path === "/"}
             className={(active) =>
-              cx("flex shrink-0 items-center whitespace-nowrap rounded-lg border px-2.5 py-1 text-[13px] font-semibold", active ? "border-line bg-ink text-white" : "border-transparent hover:border-line")
+              cx("flex shrink-0 items-center whitespace-nowrap rounded-full px-3.5 py-1.5 text-[13px] font-bold transition-colors", active ? "bg-ink text-white" : "text-text-2 hover:bg-cream")
             }
           >
             {t(p.key)}
@@ -207,7 +207,7 @@ function Logo() {
       <span className="grid h-8 w-8 place-items-center rounded-[10px] bg-ink text-sm font-bold text-cyan">R</span>
       <span className="font-display text-xl font-semibold tracking-tight">ResolveAI</span>
       <span className="hidden xl:block">
-        <Pill tone="brand">Track 3 · Autonomous AI teammate</Pill>
+        <Pill tone="ink">Track 3 · Autonomous AI teammate</Pill>
       </span>
     </Link>
   );

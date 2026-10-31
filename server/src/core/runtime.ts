@@ -232,6 +232,17 @@ export class Runtime extends EventEmitter {
 
   // ------------------------------------------------------------------ provenance
 
+  /** Plain-language reading of a fingerprint, for reasons shown to humans. */
+  private describeState(kind: "txn" | "settlement", fp: string): string {
+    const [a, b, c] = fp.split("|");
+    if (kind === "settlement") return `${a.toLowerCase().replace("_", " ")}${b ? ` (${b.toLowerCase().replaceAll("_", " ")})` : ""}`;
+    if (fp === "missing") return "missing";
+    if (b === "REVERSED" || c === "REVERSED_TO_PAYER") return "reversed to the payer";
+    if (b === "PENDING") return "credit pending at the bank";
+    if (b === "SUCCESS") return "credited to the merchant";
+    return fp;
+  }
+
   private fingerprint(kind: "txn" | "settlement", ref: string): string {
     if (kind === "txn") {
       const t = this.world.txns.get(ref);
@@ -271,7 +282,7 @@ export class Runtime extends EventEmitter {
       const changed = a.dependsOn
         .map((d) => ({ d, now: this.fingerprint(d.kind, d.ref) }))
         .filter((x) => x.now !== x.d.fingerprint)
-        .map((x) => ({ ref: x.d.ref, label: x.d.label, was: x.d.fingerprint, now: x.now }));
+        .map((x) => ({ ref: x.d.ref, label: x.d.label, was: this.describeState(x.d.kind, x.d.fingerprint), now: this.describeState(x.d.kind, x.now) }));
       if (!changed.length) continue;
       const kase = this.cases.get(a.caseId)!;
       const reason = `${changed.map((c) => `${c.label} changed from ${c.was} to ${c.now}`).join("; ")}. The pending ${a.tool} rested on the old state.`;

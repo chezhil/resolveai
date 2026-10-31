@@ -1,0 +1,10 @@
+import { chromium } from "playwright-core";
+const b = await chromium.launch({ executablePath: "C:/Program Files/Google/Chrome/Application/chrome.exe", headless: true });
+const p = await b.newPage({ viewport: { width: 1440, height: 900 } });
+await p.goto(process.argv[2] ?? "http://localhost:5173/");
+await p.waitForTimeout(4200);
+await p.screenshot({ path: "docs/media/check-hero-settled.png" });
+await p.evaluate(() => window.scrollTo(0, 780));
+await p.waitForTimeout(3500);
+await p.screenshot({ path: "docs/media/check-hero-panel.png" });
+await b.close();

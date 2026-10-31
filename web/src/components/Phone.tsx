@@ -124,7 +124,7 @@ export function Phone({ merchant, messages, cases, sarvam, onSent }: PhoneProps)
           placeholder={`Message as ${merchant.owner.split(" ")[0]}…`}
           className="min-w-0 flex-1 rounded-lg border border-line px-2.5 py-1.5 text-sm outline-none focus:border-brand"
         />
-        <Button tone="brand" size="sm" onClick={send}>
+        <Button tone="ink" size="sm" onClick={send}>
           Send
         </Button>
       </div>

@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { api } from "../lib/api";
 import { Button, Empty, LevelBadge, Pill, SectionLabel, cx } from "../components/ui";
 
@@ -56,6 +56,12 @@ export function Evals({ llmAvailable }: { llmAvailable: boolean }) {
     }
   };
 
+  // Results on first view: the offline planner suite takes a couple of seconds.
+  useEffect(() => {
+    void run("planner");
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   const passed = res?.golden.filter((g) => g.pass).length ?? 0;
   const red = res?.golden.filter((g) => g.category === "red-team") ?? [];
 
@@ -70,7 +76,7 @@ export function Evals({ llmAvailable }: { llmAvailable: boolean }) {
           </p>
         </div>
         <div className="flex gap-2">
-          <Button tone="brand" disabled={busy} onClick={() => run("planner")}>
+          <Button tone="ink" disabled={busy} onClick={() => run("planner")}>
             {busy ? "Running…" : "Run with offline planner"}
           </Button>
           <Button tone="sun" disabled={busy || !llmAvailable} onClick={() => run("llm")} title={llmAvailable ? "" : "Set GROQ_API_KEY or GEMINI_API_KEY"}>

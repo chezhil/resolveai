@@ -51,10 +51,17 @@ export function Approvals({ snap, open }: { snap: Snapshot; open: (id: string) =
                     {a.tool.replaceAll("_", " ")} {a.amount ? rupees(a.amount) : ""}
                   </span>
                   <Pill tone={a.status === "APPROVED" ? "mint" : "ember"}>{a.status.toLowerCase()}</Pill>
-                  <span className="text-muted">
-                    by {a.approvals.length > 1 ? a.approvals.map((x) => x.by).join(" + ") : a.decidedBy}
-                    {a.decidedAt ? ` · ${fmtTime(a.decidedAt)}` : ""}
-                  </span>
+                  {a.status === "QUARANTINED" ? (
+                    <span className="text-muted">
+                      {a.quarantine?.changed.map((c) => `${c.label} is now ${c.now}`).join("; ")}
+                      {a.quarantine ? ` · ${fmtTime(a.quarantine.at)}` : ""}
+                    </span>
+                  ) : (
+                    <span className="text-muted">
+                      by {a.approvals.length > 1 ? a.approvals.map((x) => x.by).join(" + ") : a.decidedBy}
+                      {a.decidedAt ? ` · ${fmtTime(a.decidedAt)}` : ""}
+                    </span>
+                  )}
                 </div>
               ))}
             </div>

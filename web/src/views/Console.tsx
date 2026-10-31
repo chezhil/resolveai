@@ -3,6 +3,8 @@ import { api } from "../lib/api";
 import { Trace } from "../components/Trace";
 import { CasePanel } from "../components/CasePanel";
 import { DemoGuide } from "../components/DemoGuide";
+import { ProvenanceGraph } from "../components/ProvenanceGraph";
+import { useState } from "react";
 import { AppLink } from "../components/AppLink";
 import { Button, Pill, SectionLabel, cx } from "../components/ui";
 
@@ -21,6 +23,7 @@ export function Console({ snap, meta, traces, selected, select }: Props) {
   const kase = snap.cases.find((c) => c.id === selected) ?? snap.cases[0];
   const lastMsg = kase ? [...snap.messages].reverse().find((m) => m.caseId === kase.id) : undefined;
   const run = (id: string) => api(`/scenarios/${id}`, {});
+  const [view, setView] = useState<"trace" | "graph">("trace");
 
   return (
     <div className="grid grid-cols-1 gap-4 lg:grid-cols-[300px_minmax(0,1fr)] 2xl:grid-cols-[320px_minmax(0,1fr)_360px]">
@@ -71,6 +74,19 @@ export function Console({ snap, meta, traces, selected, select }: Props) {
               {kase ? `${snap.merchants.find((m) => m.id === kase.merchantId)?.business} · ${kase.id}` : "Waiting for a signal"}
             </div>
           </div>
+          <div role="tablist" aria-label="Case view" className="flex rounded-full border border-line bg-cream p-0.5">
+            {(["trace", "graph"] as const).map((v) => (
+              <button
+                key={v}
+                role="tab"
+                aria-selected={view === v}
+                onClick={() => setView(v)}
+                className={cx("cursor-pointer rounded-full px-3.5 py-1 text-[12.5px] font-bold transition-colors", view === v ? "bg-ink text-white" : "text-muted hover:text-ink")}
+              >
+                {v === "trace" ? "Trace" : "Provenance"}
+              </button>
+            ))}
+          </div>
           {snap.cases.length > 1 && (
             <select value={kase?.id} onChange={(e) => select(e.target.value)} className="chunky rounded-lg bg-white px-2 py-1 text-sm">
               {snap.cases.map((c) => (
@@ -87,7 +103,7 @@ export function Console({ snap, meta, traces, selected, select }: Props) {
             <span className="font-mono">{kase.inboundRedacted}</span>
           </div>
         )}
-        <Trace kase={kase} events={kase ? (traces[kase.id] ?? []) : []} />
+        {view === "graph" && kase ? <ProvenanceGraph kase={kase} approvals={snap.approvals} /> : <Trace kase={kase} events={kase ? (traces[kase.id] ?? []) : []} />}
         {kase && ["WATCHING", "AWAITING_APPROVAL"].includes(kase.status) && (
           <div className="mt-4 flex flex-wrap items-center gap-2 rounded-[10px] border border-dashed border-line p-3 text-sm">
             {kase.status === "WATCHING" ? (

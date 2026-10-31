@@ -1,40 +1,66 @@
-@import "@fontsource-variable/geist";
-@import "@fontsource-variable/geist-mono";
+@import "@fontsource-variable/bricolage-grotesque";
+@import "@fontsource/schibsted-grotesk/400.css";
+@import "@fontsource/schibsted-grotesk/500.css";
+@import "@fontsource/schibsted-grotesk/700.css";
+@import "@fontsource/jetbrains-mono/400.css";
+@import "@fontsource/jetbrains-mono/500.css";
+@import "@fontsource/jetbrains-mono/700.css";
 @import "tailwindcss";
 
 /*
- * Design direction: "ledger blue". Cool paper console, deep-navy landing, one cyan-blue accent.
- * Shape lock: cards 16px, controls 10px, chips fully round. Pastel tones are semantic (level and stage colours).
+ * Design direction: "paper and ink". Cool off-white paper, near-black ink, mint for healthy, coral for contained.
+ * Heavy Bricolage display type, Schibsted UI text, JetBrains Mono for facts and labels.
+ * Shape lock: panels 18px, controls 12px, chips and buttons fully round. Hard offset shadows only on
+ * decorative shapes and the key call-to-action; everything else is a thin hairline.
+ * Pastel tones are semantic (level and stage colours) and stay constant across the console.
  */
 @theme {
-  --color-ink: #0b1b3a;
-  --color-cream: #f4f6fb;
-  --color-line: #d9e0ee;
-  --color-brand: #0b5fe0;
-  --color-sun: #fde8a0;
-  --color-sky: #aee6f8;
-  --color-rose: #f9c9de;
-  --color-mint: #b4efd3;
-  --color-ember: #f9b48a;
-  --color-peach: #fdd5bf;
-  --color-sand: #e6eaf3;
-  --color-muted: #5a6786;
+  --color-ink: #0b1218;
+  --color-cream: #f3f5f2;
+  --color-paper-2: #eef1ed;
+  --color-paper-3: #e3e8e2;
+  --color-line: #d4dad3;
+  --color-line-strong: #98a29b;
+  --color-brand: #3b3fd1;
+  --color-muted: #5d6975;
+  --color-text-2: #46525e;
 
-  --color-night: #070b14;
-  --color-night-2: #0d1424;
-  --color-night-line: #1d2742;
-  --color-fog: #e8edf7;
-  --color-fog-muted: #93a0bd;
-  --color-cyan: #2cc8f0;
-  --color-verified: #4be0a0;
+  --color-sun: #f6e8a8;
+  --color-sky: #cfe4f7;
+  --color-rose: #fbd3cb;
+  --color-mint: #bcf0de;
+  --color-ember: #ffb5a5;
+  --color-peach: #fde1d0;
+  --color-sand: #e3e8e2;
 
-  --font-display: "Geist Variable", "Nirmala UI", "Noto Sans Kannada", "Noto Sans Devanagari", system-ui, sans-serif;
-  --font-sans: "Geist Variable", "Nirmala UI", "Noto Sans Kannada", "Noto Sans Devanagari", "Noto Sans Tamil", "Noto Sans Telugu", "Noto Sans Bengali", system-ui, sans-serif;
-  --font-mono: "Geist Mono Variable", ui-monospace, "Cascadia Mono", monospace;
+  --color-ok: #07745e;
+  --color-bad: #c93420;
+  --color-warn: #8f5a00;
+  --color-mintfill: #3ddbb0;
+  --color-redfill: #ff6a55;
+
+  /* Dark panels (hero graph, console graph, code blocks) */
+  --color-night: #0b1218;
+  --color-night-2: #111b23;
+  --color-night-line: #24323d;
+  --color-fog: #e9f0ea;
+  --color-fog-muted: #93a3a8;
+  --color-cyan: #3ddbb0;
+  --color-verified: #3ddbb0;
+
+  --font-display: "Bricolage Grotesque Variable", "Schibsted Grotesk", "Nirmala UI", system-ui, sans-serif;
+  --font-sans: "Schibsted Grotesk", "Nirmala UI", "Noto Sans Kannada", "Noto Sans Devanagari", "Noto Sans Tamil", "Noto Sans Telugu", "Noto Sans Bengali", system-ui, sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, "Cascadia Mono", monospace;
 }
 
 :root {
   color-scheme: light;
+  --hard: 6px 6px 0 var(--color-ink);
+  --ease: cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+
+html {
+  scroll-behavior: smooth;
 }
 
 html,
@@ -53,23 +79,24 @@ body {
 @utility card {
   background: white;
   border: 1px solid var(--color-line);
-  border-radius: 16px;
-  box-shadow:
-    0 1px 2px rgba(11, 27, 58, 0.05),
-    0 10px 28px -16px rgba(11, 27, 58, 0.16);
+  border-radius: 18px;
+  box-shadow: 0 1px 0 rgba(11, 18, 24, 0.03);
 }
 
 @utility chunky {
   border: 1px solid var(--color-line);
-  box-shadow: 0 1px 2px rgba(11, 27, 58, 0.06);
 }
 
 @utility label {
   font-family: var(--font-mono);
   font-size: 10.5px;
-  letter-spacing: 0.1em;
+  letter-spacing: 0.08em;
   text-transform: uppercase;
-  font-weight: 600;
+  font-weight: 500;
+}
+
+@utility hard {
+  box-shadow: var(--hard);
 }
 
 @keyframes rise {
@@ -84,15 +111,15 @@ body {
 }
 
 .rise {
-  animation: rise 0.35s cubic-bezier(0.16, 1, 0.3, 1) both;
+  animation: rise 0.35s var(--ease) both;
 }
 
 @keyframes ring {
   0% {
-    box-shadow: 0 0 0 0 rgba(44, 200, 240, 0.6);
+    box-shadow: 0 0 0 0 rgba(61, 219, 176, 0.65);
   }
   100% {
-    box-shadow: 0 0 0 22px rgba(44, 200, 240, 0);
+    box-shadow: 0 0 0 22px rgba(61, 219, 176, 0);
   }
 }
 
@@ -102,127 +129,147 @@ body {
 
 .scroll-thin {
   scrollbar-width: thin;
-  scrollbar-color: rgba(11, 27, 58, 0.25) transparent;
+  scrollbar-color: rgba(11, 18, 24, 0.25) transparent;
 }
 
-/* ---------------------------------------------------------------- landing (dark, locked) */
+:focus-visible {
+  outline: 2px solid var(--color-ink);
+  outline-offset: 2px;
+}
+
+/* ---------------------------------------------------------------- landing (paper) */
 
 .landing {
-  background: var(--color-night);
-  color: var(--color-fog);
+  background: var(--color-cream);
+  color: var(--color-ink);
   min-height: 100dvh;
   position: relative;
   overflow-x: clip;
 }
 
 .landing ::selection {
-  background: var(--color-cyan);
-  color: var(--color-night);
+  background: var(--color-mintfill);
+  color: var(--color-ink);
 }
 
-/* Faint ledger rules behind the hero: a one-off texture on a fixed, non-interactive layer. */
-.ledger-bg {
-  position: absolute;
-  inset: 0 0 auto 0;
-  height: 900px;
+.display {
+  font-family: var(--font-display);
+  font-weight: 700;
+  letter-spacing: -0.045em;
+  line-height: 0.92;
+}
+
+/* Outlined italic emphasis word, as in the reference. Latin script only; other scripts use .mark. */
+.outline-word {
+  font-style: italic;
+  color: transparent;
+  -webkit-text-stroke: 2px var(--color-ink);
+  paint-order: stroke fill;
+}
+
+.mark {
+  background: linear-gradient(transparent 62%, var(--color-mintfill) 62% 94%, transparent 94%);
+}
+
+.btn-ink {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.6rem;
+  white-space: nowrap;
+  border-radius: 999px;
+  background: var(--color-ink);
+  color: white;
+  font-weight: 700;
+  transition:
+    transform 0.2s var(--ease),
+    box-shadow 0.2s var(--ease);
+}
+
+.btn-ink:hover {
+  transform: translate(-2px, -2px);
+  box-shadow: 4px 4px 0 var(--color-mintfill);
+}
+
+.btn-ink:active {
+  transform: scale(0.98);
+  box-shadow: none;
+}
+
+.btn-line {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.6rem;
+  white-space: nowrap;
+  border-radius: 999px;
+  border: 1.5px solid var(--color-ink);
+  background: transparent;
+  color: var(--color-ink);
+  font-weight: 700;
+  transition:
+    background-color 0.2s,
+    transform 0.2s var(--ease);
+}
+
+.btn-line:hover {
+  background: white;
+}
+
+.btn-line:active {
+  transform: scale(0.98);
+}
+
+/* Corner crop marks and the dotted graph backdrop */
+.crop {
+  position: fixed;
+  width: 22px;
+  height: 22px;
+  border: 0 solid var(--color-ink);
+  opacity: 0.5;
   pointer-events: none;
-  background-image:
-    linear-gradient(to bottom, rgba(44, 200, 240, 0.07), transparent 70%),
-    repeating-linear-gradient(to bottom, transparent 0 47px, rgba(147, 160, 189, 0.07) 47px 48px);
-  mask-image: linear-gradient(to bottom, #000 30%, transparent);
+  z-index: 25;
+}
+.crop.tl {
+  top: 14px;
+  left: 14px;
+  border-top-width: 1.5px;
+  border-left-width: 1.5px;
+}
+.crop.tr {
+  top: 14px;
+  right: 14px;
+  border-top-width: 1.5px;
+  border-right-width: 1.5px;
+}
+.crop.bl {
+  bottom: 14px;
+  left: 14px;
+  border-bottom-width: 1.5px;
+  border-left-width: 1.5px;
+}
+.crop.br {
+  bottom: 14px;
+  right: 14px;
+  border-bottom-width: 1.5px;
+  border-right-width: 1.5px;
+}
+
+.dotgrid {
+  background-image: radial-gradient(rgba(147, 163, 168, 0.28) 1px, transparent 1px);
+  background-size: 22px 22px;
 }
 
 .reveal {
   opacity: 0;
   transform: translateY(18px);
   transition:
-    opacity 0.7s cubic-bezier(0.16, 1, 0.3, 1),
-    transform 0.7s cubic-bezier(0.16, 1, 0.3, 1);
+    opacity 0.7s var(--ease),
+    transform 0.7s var(--ease);
   transition-delay: var(--d, 0ms);
 }
 
 .reveal.in {
   opacity: 1;
   transform: none;
-}
-
-/* Pipeline: a rupee chip walks through the five stages; each node lights as it passes. */
-@keyframes node-lit {
-  0%,
-  4% {
-    border-color: var(--color-night-line);
-    background: var(--color-night-2);
-  }
-  8%,
-  22% {
-    border-color: var(--color-cyan);
-    background: rgba(44, 200, 240, 0.12);
-  }
-  30%,
-  100% {
-    border-color: var(--color-night-line);
-    background: var(--color-night-2);
-  }
-}
-
-@keyframes node-verified {
-  0%,
-  72% {
-    border-color: var(--color-night-line);
-    background: var(--color-night-2);
-  }
-  80%,
-  96% {
-    border-color: var(--color-verified);
-    background: rgba(75, 224, 160, 0.14);
-  }
-  100% {
-    border-color: var(--color-night-line);
-    background: var(--color-night-2);
-  }
-}
-
-@keyframes chip-walk {
-  0%,
-  4% {
-    transform: translateY(0);
-  }
-  72%,
-  100% {
-    transform: translateY(var(--walk));
-  }
-}
-
-@keyframes settle-fade {
-  0%,
-  78% {
-    opacity: 0;
-  }
-  84%,
-  96% {
-    opacity: 1;
-  }
-  100% {
-    opacity: 0;
-  }
-}
-
-.pipe-node {
-  animation: node-lit 10s linear infinite;
-  animation-delay: calc(var(--i) * 1.6s);
-}
-
-.pipe-node.last {
-  animation-name: node-verified;
-  animation-delay: 0s;
-}
-
-.pipe-chip {
-  animation: chip-walk 10s linear infinite;
-}
-
-.pipe-settle {
-  animation: settle-fade 10s linear infinite;
 }
 
 @keyframes marquee {
@@ -232,58 +279,61 @@ body {
 }
 
 .marquee-track {
-  animation: marquee 48s linear infinite;
+  animation: marquee 50s linear infinite;
   width: max-content;
 }
 
-.btn-primary {
-  background: var(--color-cyan);
-  color: var(--color-night);
-  border-radius: 10px;
-  font-weight: 600;
+/* Graph panel node states (SVG) */
+.gnode rect {
+  fill: var(--color-night-2);
+  stroke: rgba(61, 219, 176, 0.55);
+  stroke-width: 1.4;
   transition:
-    transform 0.2s cubic-bezier(0.16, 1, 0.3, 1),
-    background-color 0.2s;
+    stroke 0.35s var(--ease),
+    fill 0.35s var(--ease);
 }
-
-.btn-primary:hover {
-  background: #5ad7f6;
+.gnode text {
+  fill: var(--color-fog);
+  font-family: var(--font-sans);
+  font-weight: 700;
 }
-
-.btn-primary:active {
-  transform: scale(0.98);
+.gnode .sub {
+  fill: var(--color-fog-muted);
+  font-family: var(--font-mono);
+  font-weight: 400;
 }
-
-.btn-ghost {
-  border: 1px solid var(--color-night-line);
-  color: var(--color-fog);
-  border-radius: 10px;
-  font-weight: 500;
-  transition:
-    border-color 0.2s,
-    transform 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+.gnode.hot rect {
+  stroke: var(--color-redfill);
+  stroke-dasharray: 5 4;
+  fill: rgba(255, 106, 85, 0.1);
 }
-
-.btn-ghost:hover {
-  border-color: var(--color-fog-muted);
+.gnode.hot text {
+  fill: #ffd9d2;
 }
-
-.btn-ghost:active {
-  transform: scale(0.98);
+.gnode.focus rect {
+  stroke-width: 2.4;
+  stroke: var(--color-mintfill);
 }
-
-.landing a:focus-visible,
-.landing button:focus-visible {
-  outline: 2px solid var(--color-cyan);
-  outline-offset: 3px;
+.gnode.dim {
+  opacity: 0.35;
+}
+.glink {
+  stroke: rgba(147, 163, 168, 0.5);
+  stroke-width: 1.2;
+  stroke-dasharray: 4 4;
+  fill: none;
+  transition: stroke 0.35s var(--ease);
+}
+.glink.hot {
+  stroke: var(--color-redfill);
 }
 
 @media (prefers-reduced-motion: reduce) {
+  html {
+    scroll-behavior: auto;
+  }
   .rise,
   .ring-pulse,
-  .pipe-node,
-  .pipe-chip,
-  .pipe-settle,
   .marquee-track {
     animation: none;
   }
@@ -292,10 +342,8 @@ body {
     transform: none;
     transition: none;
   }
-  .pipe-settle {
-    opacity: 1;
-  }
-  .pipe-chip {
-    transform: translateY(var(--walk));
+  .btn-ink,
+  .btn-line {
+    transition: none;
   }
 }

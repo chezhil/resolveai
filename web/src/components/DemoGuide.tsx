@@ -108,7 +108,7 @@ export function DemoGuide({ snap }: { snap: Snapshot }) {
       <div className="font-display text-base font-semibold leading-tight">{step.title}</div>
       <p className="mt-1 text-[12.5px] leading-snug">{pinRequired && step.pinCaption ? step.pinCaption : step.caption}</p>
       <div className="mt-2 flex flex-wrap items-center gap-2">
-        <Button tone="brand" size="sm" disabled={busy} onClick={go}>
+        <Button tone="ink" size="sm" disabled={busy} onClick={go}>
           {pinRequired && step.pinAction ? step.pinAction : step.action}
         </Button>
         <Button size="sm" disabled={i === 0} onClick={() => setI(i - 1)}>
