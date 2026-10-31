@@ -3,6 +3,7 @@ import { fmtTime, rupees } from "../lib/api";
 import { usePinRequired } from "../lib/meta";
 import { ApprovalCard } from "../components/CasePanel";
 import { Empty, Pill, SectionLabel, StatusBadge } from "../components/ui";
+import { ScenarioButtons } from "../components/ScenarioButtons";
 
 /** Inbox for the humans in the loop: L2 approvals (two-person above ₹1 L) and ready handoffs. */
 export function Approvals({ snap, open }: { snap: Snapshot; open: (id: string) => void }) {
@@ -38,7 +39,7 @@ export function Approvals({ snap, open }: { snap: Snapshot; open: (id: string) =
             ))}
           </div>
         ) : (
-          <Empty>Nothing waiting. L2 actions land here (try scenario B or C, or a duplicate debit above ₹2,000).</Empty>
+          <Empty action={<ScenarioButtons items={[{ id: "B", label: "Run scenario B · needs two approvers" }]} />}>Nothing waiting. Higher-value actions (L2) land here for a human to sign.</Empty>
         )}
         {decided.length > 0 && (
           <div className="card p-3">
@@ -82,7 +83,7 @@ export function Approvals({ snap, open }: { snap: Snapshot; open: (id: string) =
             </button>
           ))
         ) : (
-          <Empty>No escalations yet.</Empty>
+          <Empty action={<ScenarioButtons items={[{ id: "D", label: "Run scenario D · payout-change attack" }]} />}>No escalations yet. Fraud signals and ambiguous cases arrive here with a full case file.</Empty>
         )}
       </div>
     </div>

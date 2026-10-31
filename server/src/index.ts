@@ -265,6 +265,39 @@ app.post("/api/evals/run", wrap(async (q) => {
   }
 }));
 
+// Public proof for the landing page and the Analytics view: the deterministic planner suite and the shadow replay are the same for
+// every visitor, so one run is shared for a few minutes instead of re-running both per page view. It needs no room, so a
+// landing-page visit allocates nothing. "Re-run" on the Evals and Analytics pages still calls POST /api/evals/run for a fresh run.
+const PROOF_TTL_MS = Number(process.env.PROOF_TTL_MS ?? 10 * 60_000);
+let proofCache: { at: number; body: object } | null = null;
+let proofBuild: Promise<void> | null = null;
+
+async function buildProof() {
+  while (evalRun) await (evalRun as Promise<unknown>).catch(() => {}); // evals spin up many worlds: one run at a time per process
+  evalRun = Promise.all([runGolden({ brain: "planner" }), runShadowReplay()]);
+  try {
+    const [golden, shadow] = (await evalRun) as [Awaited<ReturnType<typeof runGolden>>, Awaited<ReturnType<typeof runShadowReplay>>];
+    proofCache = { at: Date.now(), body: { brain: "planner", golden, shadow, policyRules: Object.keys(RULES).length } };
+  } finally {
+    evalRun = null;
+  }
+}
+
+app.get("/api/proof", limiter(30, "proof"), async (req, res) => {
+  try {
+    if (!proofCache || Date.now() - proofCache.at > PROOF_TTL_MS) {
+      proofBuild ??= buildProof().finally(() => {
+        proofBuild = null;
+      });
+      await proofBuild;
+    }
+    if (!proofCache) throw new Error("proof unavailable");
+    res.set("Cache-Control", "public, max-age=60").json({ ...proofCache.body, generatedAt: new Date(proofCache.at).toISOString(), ttlSeconds: Math.round(PROOF_TTL_MS / 1000) });
+  } catch (e) {
+    sendError(req, res, e);
+  }
+});
+
 app.post("/api/voice/transcribe", express.raw({ type: ["audio/*", "application/octet-stream"], limit: "10mb" }), wrap(async (q) => {
   if (!sarvamEnabled()) throw new ClientError("Set SARVAM_API_KEY to enable server-side ASR", 501);
   return transcribe(q.body as Buffer, String(q.headers["content-type"] ?? "audio/webm"), String(q.query.lang ?? ""));

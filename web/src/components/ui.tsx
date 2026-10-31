@@ -79,8 +79,13 @@ export function SectionLabel({ children, right }: { children: ReactNode; right?:
   );
 }
 
-export function Empty({ children }: { children: ReactNode }) {
-  return <div className="rounded-[10px] border border-dashed border-line p-5 text-center text-sm text-muted">{children}</div>;
+export function Empty({ children, action }: { children: ReactNode; action?: ReactNode }) {
+  return (
+    <div className="rounded-[10px] border border-dashed border-line p-5 text-center text-sm text-muted">
+      {children}
+      {action && <div className="mt-3 flex flex-wrap items-center justify-center gap-2">{action}</div>}
+    </div>
+  );
 }
 
 export function Json({ value }: { value: unknown }) {

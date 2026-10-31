@@ -14,6 +14,7 @@ import { Cases } from "./views/Cases";
 import { Evals } from "./views/Evals";
 import { Audit } from "./views/Audit";
 import { Impact } from "./views/Impact";
+import { Analytics } from "./views/Analytics";
 import { MetricsStrip } from "./components/MetricsStrip";
 import { AppNavLink, useAppNavigate } from "./components/AppLink";
 import { Button, Pill, cx } from "./components/ui";
@@ -28,6 +29,7 @@ const PAGES: Page[] = [
   { path: "/merchant", key: "app.phone" },
   { path: "/approvals", key: "app.approvals" },
   { path: "/cases", key: "app.cases" },
+  { path: "/analytics", key: "app.analytics" },
   { path: "/evals", key: "app.evals" },
   { path: "/audit", key: "app.audit" },
   { path: "/impact", key: "app.impact" },
@@ -90,6 +92,7 @@ export default function App() {
             <Route path="/merchant" element={<Merchant snap={snap} meta={meta} live={lastAnnouncement} selected={selected} select={setSelected} />} />
             <Route path="/approvals" element={<Approvals snap={snap} open={openCase} />} />
             <Route path="/cases" element={<Cases snap={snap} open={openCase} />} />
+            <Route path="/analytics" element={<Analytics snap={snap} meta={meta} />} />
             <Route path="/evals" element={<Evals llmAvailable={snap.providers.length > 0} />} />
             <Route path="/audit" element={<Audit version={snap.cases.reduce((s, c) => s + c.actions.length + c.steps, 0) + snap.approvals.length} />} />
             <Route

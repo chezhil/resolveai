@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import type { Snapshot } from "../lib/api";
 import { api, fmtTime } from "../lib/api";
 import { Empty, LevelBadge, StatusBadge } from "../components/ui";
+import { ScenarioButtons } from "../components/ScenarioButtons";
 
 interface ArchiveRow {
   room: string;
@@ -70,7 +71,7 @@ export function Cases({ snap, open }: { snap: Snapshot; open: (id: string) => vo
         </div>
         {snap.cases.length === 0 ? (
           <div className="p-4">
-            <Empty>No cases yet. Run a scenario from the live console.</Empty>
+            <Empty action={<ScenarioButtons items={[{ id: "A", label: "Run scenario A · Manjunath's ₹480" }, { id: "B", label: "Run scenario B · ₹1.84 L settlement" }]} />}>No cases yet. Start one and watch the agent hear, plan, check, act and verify.</Empty>
           </div>
         ) : (
           <div className="overflow-x-auto">

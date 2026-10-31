@@ -13,6 +13,7 @@ import { useReveal } from "../lib/reveal";
 import { LangSwitch } from "../components/LangSwitch";
 import { GraphPanel } from "../components/landing/GraphPanel";
 import { CopyBlock } from "./Plugins";
+import { summarise, useEvalReport } from "../lib/analytics";
 
 gsap.registerPlugin(ScrollTrigger);
 
@@ -408,8 +409,15 @@ function ConsoleTour() {
   );
 }
 
-const PROOF = [
-  { n: 33, label: "golden cases pass, including belief invalidation" },
+interface ProofItem {
+  n: number;
+  label: string;
+  suffix?: string;
+}
+
+/** Shown only until the live numbers arrive, or if the API is unreachable. These must never be quoted as live. */
+const PROOF_FALLBACK: ProofItem[] = [
+  { n: 35, label: "golden cases pass, including belief invalidation" },
   { n: 11, label: "red-team attacks blocked" },
   { n: 14, label: "of 14 replayed tickets right", suffix: "/14" },
   { n: 15, label: "policy rules gate every action" },
@@ -419,6 +427,20 @@ const PROOF = [
 function Proof() {
   const { t } = useI18n();
   const wrap = useRef<HTMLDivElement>(null);
+  const { data } = useEvalReport();
+  const proof = data ? summarise(data) : null;
+  // Live from the running server (cached for a few minutes), so this section cannot drift from the code. Only the dependency audit is a
+  // recorded result (npm audit), not something the page can recompute.
+  const PROOF: ProofItem[] = proof
+    ? [
+        { n: proof.goldenPassed, label: `of ${proof.goldenTotal} golden cases pass, including belief invalidation`, suffix: "" },
+        { n: proof.redTeamPassed, label: `of ${proof.redTeamTotal} red-team attacks blocked` },
+        { n: proof.agentCorrect, label: `of ${proof.tickets} replayed tickets right (humans: ${proof.humanCorrect})`, suffix: `/${proof.tickets}` },
+        { n: data?.policyRules ?? 15, label: "policy rules gate every action" },
+        { n: 0, label: "known vulnerabilities in production dependencies (last npm audit)" },
+      ]
+    : PROOF_FALLBACK;
+  const sig = PROOF.map((p) => p.n).join(",");
   useEffect(() => {
     const el = wrap.current;
     if (!el) return;
@@ -437,13 +459,13 @@ function Proof() {
       });
     });
     return () => mm.revert();
-  }, []);
+  }, [sig]);
   return (
     <section id="proof" ref={wrap} className="mx-auto max-w-6xl px-6 py-28">
       <SectionHead marker="05" title={<>Numbers from the harness.</>} body="Every figure below is printed by npm run eval, npm test or npm audit. The cases run against simulated Paytm systems and synthetic tickets." />
       <dl className="mt-14 grid grid-cols-2 gap-x-6 gap-y-12 md:grid-cols-5">
         {PROOF.map((p, i) => (
-          <div key={p.label} className="reveal border-t-[1.5px] border-ink pt-4" style={{ ["--d" as string]: `${i * 70}ms` }}>
+          <div key={i} className="reveal border-t-[1.5px] border-ink pt-4" style={{ ["--d" as string]: `${i * 70}ms` }}>
             <dt className="display text-[clamp(2.6rem,5vw,4rem)]">
               <span data-count={p.n}>{p.n}</span>
               {p.suffix}
@@ -453,6 +475,15 @@ function Proof() {
         ))}
       </dl>
       <p className="reveal mt-10 max-w-[70ch] text-[13px] text-text-2">{t("proof.note")}</p>
+      <p className="reveal mt-4 flex flex-wrap items-center gap-x-4 gap-y-2 text-[13px] font-semibold">
+        <span className="inline-flex items-center gap-1.5 text-text-2">
+          <i className={`h-2 w-2 rounded-full ${proof ? "bg-mintfill" : "bg-line-strong"}`} />
+          {proof ? "Computed just now from the running server" : "Connecting to the running server…"}
+        </span>
+        <RoomLink to="/app/analytics" className="inline-flex items-center gap-1 underline decoration-ink/30 underline-offset-4 hover:decoration-ink">
+          See every chart and the method <ArrowUpRight size={14} weight="bold" />
+        </RoomLink>
+      </p>
     </section>
   );
 }
