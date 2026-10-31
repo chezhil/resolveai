@@ -272,6 +272,54 @@ body {
   transform: none;
 }
 
+/* Trace lines type in one after another (How it works) */
+.trace-line {
+  opacity: 0;
+  transform: translateY(6px);
+  animation: trace-in 0.45s var(--ease) forwards;
+}
+
+@keyframes trace-in {
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+/* Section titles wipe up as they enter */
+.reveal .wipe {
+  clip-path: inset(0 0 105% 0);
+  transform: translateY(0.22em);
+  transition:
+    clip-path 0.95s var(--ease),
+    transform 0.95s var(--ease);
+  transition-delay: calc(var(--d, 0ms) + 90ms);
+}
+
+.reveal.in .wipe {
+  clip-path: inset(-14% 0 -14% 0);
+  transform: none;
+}
+
+.scroll-progress {
+  position: fixed;
+  inset: 0 0 auto 0;
+  height: 3px;
+  z-index: 60;
+  background: var(--color-mintfill);
+  transform: scaleX(0);
+  transform-origin: 0 50%;
+  pointer-events: none;
+}
+
+.faq summary::-webkit-details-marker {
+  display: none;
+}
+
+.faq[open] .faq-body {
+  animation: rise 0.35s var(--ease) both;
+}
+
 @keyframes marquee {
   to {
     transform: translateX(-50%);
@@ -341,6 +389,24 @@ body {
     opacity: 1;
     transform: none;
     transition: none;
+  }
+  .reveal .wipe {
+    clip-path: none;
+    transform: none;
+    transition: none;
+  }
+  .trace-line {
+    opacity: 1;
+    transform: none;
+    animation: none;
+  }
+  .scroll-progress {
+    display: none;
+  }
+  .ladder-step {
+    transition: none !important;
+    transform: none !important;
+    opacity: 1 !important;
   }
   .btn-ink,
   .btn-line {

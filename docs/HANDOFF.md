@@ -1,7 +1,7 @@
 # ResolveAI: team handoff
 
 Everything you need to take over ResolveAI: what exists, how it works, how to change it, and what to do next.
-Written 30 Oct 2026, the evening before the offline finals.
+Written 30 Oct 2026, the evening before the offline finals. **Updated 31 Oct (finals day):** Analytics and proof page, live landing proof, a landing-page rebuild, `GET /api/proof`, new verify scripts, and the corrections below (35 golden cases, the duplicate-debit flow is done, P14, the router and structure of the frontend).
 
 ---
 
@@ -14,9 +14,9 @@ Written 30 Oct 2026, the evening before the offline finals.
 | **Live site** | https://resolveai-production-99b1.up.railway.app |
 | **Finals** | **31 Oct 2026**, offline, Bengaluru |
 | **CI** | GitHub Actions: typecheck → tests → evals → build, on every push ([ci.yml](../.github/workflows/ci.yml)) |
-| **Tests** | 17 unit tests and **28/28 golden cases** (incl. 11 red-team attacks) pass. Shadow replay: agent makes the right call on 93% of tickets vs 79% for humans |
+| **Tests** | 36 unit tests and **35/35 golden cases** (incl. 11 red-team attacks) pass. Shadow replay: agent right on 14/14 tickets vs 11/14 (79%) for humans. Browser gates: `scripts/verify-app.mjs`, `verify-landing.mjs`, `verify-analytics.mjs` (see §9) |
 | **Brain on the live site** | **Offline planner.** No `GROQ_API_KEY`/`GEMINI_API_KEY` is set anywhere yet, so the LLM path has never run against a real API |
-| **Pitch deck** | [docs/ResolveAI_Pitch.pdf](ResolveAI_Pitch.pdf) · Demo script: [docs/DEMO.md](DEMO.md) |
+| **Pitch deck** | [docs/ResolveAI_Pitch.pdf](ResolveAI_Pitch.pdf) · Demo script: [docs/DEMO.md](DEMO.md) · Analytics page: [docs/ANALYTICS.md](ANALYTICS.md) |
 
 ### ⚠️ Read before you push
 
@@ -65,7 +65,7 @@ merchant message / payment event
   ▼ HEAR      triage.ts: language (kn/hi/en, romanised too), workflow, amount, injection/urgency signals
   │           pii.ts: phone/VPA/PAN/Aadhaar/card/account → <TOKENS>, encrypted per case
   ▼ PLAN      Brain proposes tool calls: LlmBrain (Groq → Gemini) or PlannerBrain (deterministic)
-  ▼ CHECK     policy/engine.ts: L0–L3 verdict, rules P0–P13 (ALLOW / NEEDS_APPROVAL / BLOCK / ESCALATE / SHADOW)
+  ▼ CHECK     policy/engine.ts: L0–L3 verdict, rules P0–P14 (ALLOW / NEEDS_APPROVAL / BLOCK / ESCALATE / SHADOW)
   ▼ ACT       ALLOW → policy mints a signed one-time capability → tool runs against the simulated systems
   │           NEEDS_APPROVAL → approval queue (two humans above ₹1 L) → resumes the brain after
   ▼ VERIFY    watchers wake the case when money moves; close_case re-reads ledger/settlement/dispute
@@ -96,7 +96,7 @@ server/src
     brain.ts            Brain interface (next / observe / event)
     llm.ts              LlmBrain: OpenAI-compatible tool calling, Groq then Gemini; system prompt
     planner.ts          PlannerBrain: per-workflow state machines (same tools/policy as the LLM)
-  policy/engine.ts      ★ all policy rules P0–P13, tool allowlists, value tiers
+  policy/engine.ts      ★ all policy rules P0–P14, tool allowlists, value tiers
   tools/registry.ts     ★ 21 MCP-style tools with JSON schemas; action tools gated by capabilities
   integrations/paytm.ts Paytm PG transaction-status adapter (mock, real response shape)
   channels/whatsapp.ts  Twilio WhatsApp webhook (signature check) + outbound replies
@@ -146,6 +146,7 @@ Sim clock starts at **31 Oct 2026, 08:12 IST**. Bank push-credits land at **7:10
 | P11 | Least privilege: allowed action tools per workflow (`WORKFLOW_TOOLS`) |
 | P12 | Velocity: >5 money actions per merchant per 24 h → human |
 | P13 | Two-person rule above ₹1,00,000 (enforced in `Runtime.decideApproval`) |
+| P14 | Duplicate debit: refund only the later of two identical, credited payments from the same payer within 15 minutes, both seen in this case's ledger lookup |
 
 ---
 
@@ -153,7 +154,7 @@ Sim clock starts at **31 Oct 2026, 08:12 IST**. Bank push-credits land at **7:10
 
 **A new tool:** add an entry to `RAW_TOOLS` in `tools/registry.ts` with `kind` (`read`/`act`/`control`), a JSON schema, `run`, and `facts` (what the result proves). If it's `act`, add a policy branch in `evaluateRules` (otherwise it escalates by default), add it to `WORKFLOW_TOOLS` for the workflows that may use it, and add a trace label in `label()` in `runtime.ts`. Capability gating is automatic.
 
-**A new workflow** (e.g. duplicate debit, the known gap): add a triage rule in `agent/triage.ts`, a `Workflow` type in `core/types.ts`, a `WORKFLOW_TOOLS` entry, a branch in `PlannerBrain.next()`, and a verifier condition in `verifyAndClose` if it moves money. Then add golden cases.
+**A new workflow** (duplicate debit is the worked example: `agent/planner.ts` `duplicateDebit`, rule P14, golden cases G18–G21): add a triage rule in `agent/triage.ts`, a `Workflow` type in `core/types.ts`, a `WORKFLOW_TOOLS` entry, a branch in `PlannerBrain.next()`, and a verifier condition in `verifyAndClose` if it moves money. Then add golden cases.
 
 **A golden case:** append to `GOLDEN` in `evals/golden.ts`. Each runs in a fresh `Runtime`; assert on world state (`rt.world…`), not on the agent's words. `npm run eval` shows failures with details.
 
@@ -165,7 +166,7 @@ Sim clock starts at **31 Oct 2026, 08:12 IST**. Bank push-credits land at **7:10
 
 ### Stack
 
-React 19 · Vite 8 · TypeScript · **Tailwind CSS v4** (configured in CSS, there's no `tailwind.config.js`) · no router, no state library.
+React 19 · Vite 8 · TypeScript · **Tailwind CSS v4** (configured in CSS, there's no `tailwind.config.js`) · `react-router` (landing at `/`, console at `/app/*`) · GSAP + ScrollTrigger on the landing page · a small SSE store (`lib/store.ts`), no state library. Charts are hand-drawn SVG and CSS (no chart library).
 
 ### Structure
 
@@ -186,6 +187,14 @@ web/src
   views/Evals.tsx       golden + red-team + shadow replay
   views/Audit.tsx       audit chain, anchors, tamper buttons
   views/Impact.tsx      unit-economics calculator, live metrics, security posture, roadmap, rules
+  views/Analytics.tsx   ★ proof and analytics page (/app/analytics): see docs/ANALYTICS.md
+  views/Landing.tsx     landing page (/): hero, problem, how it works, playground, defence, autonomy, console tour, proof, languages, plugins, FAQ, honest
+  views/Merchant.tsx, Approvals.tsx, Plugins.tsx   merchant phone, approval inbox, MCP plugins
+  components/charts.tsx             SVG and CSS chart primitives (Dumbbell, Donut, PairBars, PassBars, MiniBars, Stat)
+  components/ScenarioButtons.tsx    one-click scenario starters for empty pages
+  components/landing/               HowItWorks, AutonomyLadder, ProofCharts, Faq, SiteFooter, GraphPanel
+  lib/analytics.ts                  shared /api/proof loader (cached) and the pure functions behind every chart
+  lib/reveal.ts                     scroll reveal: IntersectionObserver plus a scroll sweep (see gotchas)
 ```
 
 ### Data flow (keep this contract and you can redesign freely)
@@ -206,7 +215,7 @@ web/src
 | GET | `/api/state` | Snapshot |
 | GET | `/api/meta` | scenarios, rules, tools, kb, voice/whatsapp availability |
 | GET | `/api/cases/:id` | case + full trace + messages + approvals + watchers + audit |
-| POST | `/api/scenarios/:id` | run scenario A–F |
+| POST | `/api/scenarios/:id` | run scenario A–H (see `GET /api/meta` for the list) |
 | POST | `/api/inbound` | `{merchantId, text, channel?}` → `{caseId}`; 429 if rate-limited |
 | POST | `/api/approvals/:id` | `{decision: "APPROVED"\|"REJECTED", pin}` with approver PINs set; `{decision, by: "ops-lead"\|"risk-lead"}` when identity is simulated |
 | POST | `/api/cases/:id/csat` | `{score: 1–5}` (resolved cases only) |
@@ -219,6 +228,7 @@ web/src
 | POST | `/api/evals/run` | `{brain}` → golden + shadow results (rate-limited 6/min/IP) |
 | POST | `/api/voice/transcribe`, `/api/voice/tts` | Sarvam only |
 | POST | `/api/channels/whatsapp/twilio` | Twilio webhook |
+| GET | `/api/proof` | Shared, cached eval run for the landing page and Analytics: `{brain, golden, shadow, policyRules, generatedAt, ttlSeconds}`. No room needed. Rate limited 30/min/IP; cached for `PROOF_TTL_MS` (10 min) |
 | GET | `/api/health` | |
 
 Types for all of these live in `web/src/lib/api.ts`. Keep them in sync with `server/src/core/types.ts` by hand (no codegen).
@@ -243,6 +253,10 @@ Colour meaning is consistent: **L0 sun, L1 sky, L2 rose, L3 ember**; stages HEAR
 - Grids need `grid-cols-1` (and `min-w-0` on children) at small widths, or long content causes horizontal scroll on phones.
 - `hidden md:inline-flex` on a component whose base class already has `inline-flex` doesn't hide it; wrap it in a span instead.
 - Every fetch must send `x-room`, or you'll be looking at a different room's data.
+- **Never let React own the `className` of an element that `useReveal` toggles.** The observer adds `.in` by hand; the next render that changes `className` overwrites it and the element goes back to `opacity: 0`. Put anything state-dependent on an inner element (see `HowItWorks.tsx`).
+- **An IntersectionObserver never fires for an element you jump straight past** (fast scroll, `/#proof` deep link, anchor click). `useReveal` therefore also sweeps on scroll and reveals everything at or above the fold. Keep that if you rewrite it.
+- Absolutely positioned `sr-only` spans inside an `overflow-x-auto` wrapper escape its clipping and widen the page on phones unless the wrapper is `relative`.
+- Keys on revealed lists: key by index when the labels change with live data, or React remounts the nodes and they lose their `.in` class.
 
 ---
 
@@ -272,8 +286,12 @@ Colour meaning is consistent: **L0 sun, L1 sky, L2 rose, L3 ember**; stages HEAR
 | `PACING_MS` | Delay between trace steps in the live console (default 450) |
 | `MAX_ROOMS`, `WRITE_RATE_PER_MIN` | Abuse limits for the public deploy |
 | `APPROVER_OPS_PIN`, `APPROVER_RISK_PIN` | Approver PINs (6+ digits). When set, `/api/approvals/:id` takes `{decision, pin}` and the approver is bound to the PIN (constant-time compare); unset = simulated identity, shown in the UI |
-| `APPROVAL_RATE_PER_MIN`, `TRUST_PROXY_HOPS`, `MAX_STREAMS_PER_IP` | Approval rate limit (10), proxy hops to trust for client IPs (1), open SSE streams per IP (30) |
+| `APPROVAL_RATE_PER_MIN`, `TRUST_PROXY_HOPS`, `MAX_STREAMS_PER_IP` | Approval rate limit (10), proxy hops to trust for client IPs (1), open SSE streams per IP (30). **See the note below the table about `TRUST_PROXY_HOPS` on Railway** |
+| `PROOF_TTL_MS` | How long `GET /api/proof` serves one shared eval run (default 600000 = 10 minutes) |
+| `STRICT_TWO_PERSON` | `1` = with simulated approver identities, the two signatures on one approval must come from different client addresses. Off by default so one presenter can play both approvers in the demo |
 | `PORT` / `API_PORT` | Production port / dev API port (8787) |
+
+**`TRUST_PROXY_HOPS` on Railway (open, not yet fixed).** On 31 Oct, 120 parallel requests to `/api/proof` all returned 200 on the live site, although that route is limited to 30 per minute per IP. The same limiter guards the evals (6/min), voice (20/min), approvals and general write routes, so none of them is likely limiting per visitor there. The likely cause is more than one proxy hop in front of the app: with `TRUST_PROXY_HOPS=1` the app sees a rotating edge address, not the visitor's. Try `TRUST_PROXY_HOPS=2` on Railway and re-run `node scripts/verify-analytics.mjs <live url>`: it prints a `WARN` line until the limiter works. Do not set it higher than the real number of proxies, or clients can spoof their address.
 
 Locally: `.env` at the repo root. On Railway: `railway variables --service resolveai --set …` or the dashboard (that triggers a redeploy).
 
@@ -281,13 +299,24 @@ Locally: `.env` at the repo root. On Railway: `railway variables --service resol
 
 ## 9. What's verified and what isn't
 
-**Verified:** all golden cases and tests in CI; scenarios A, B, D, E and the Evals tab clicked through in a browser (desktop and phone width); the live Railway site (scenario A, two-person approval, SSE through Railway's proxy); Docker image builds and serves; SQLite archive writes; the anchor tamper demo.
+**Verified:** all golden cases and tests in CI; the three browser gates in `scripts/` (below); the Analytics page, the live landing proof and `/api/proof` against the production build and the live Railway site (31 Oct); scenarios A, B, D, E and the Evals tab clicked through in a browser (desktop and phone width); the live Railway site (scenario A, two-person approval, SSE through Railway's proxy); Docker image builds and serves; SQLite archive writes; the anchor tamper demo.
 
 **Not verified:**
 - **Groq/Gemini**: no key has ever been set. The prompt and tool schemas are untested against a real model. This is the biggest risk for "is this really AI?" questions.
 - **Sarvam** ASR/TTS and **Twilio WhatsApp**: code is complete, never run against the real services.
 - **Gist anchor sink**: untested.
 - Scenario **C** and **F** were tested only by evals, not clicked in the browser after the latest changes.
+- **Per-IP rate limiting on Railway** (see §8).
+
+### Browser gates (need Google Chrome; run against a running server)
+
+```bash
+node scripts/verify-app.mjs        http://localhost:8787   # 9 console pages x 4 widths: horizontal overflow, page errors
+node scripts/verify-landing.mjs    http://localhost:8787   # landing at 4 widths: overflow, every reveal lands, fonts, no em/en dashes, console errors
+node scripts/verify-analytics.mjs  http://localhost:8787   # Analytics, live proof, /api/proof, core scenarios, landing motion and reduced motion
+```
+
+`verify-landing.mjs` writes screenshots to `docs/media/check-v-*.png`; delete them before committing.
 
 ---
 
@@ -300,12 +329,13 @@ Locally: `.env` at the repo root. On Railway: `railway variables --service resol
 4. Freeze `main` before judging.
 
 ### Next
-- **Duplicate-debit workflow**: the one shadow-replay miss (H-1175). Detect two debits for one bill → L1 refund of the duplicate.
+- ~~Duplicate-debit workflow~~ (done: scenario G, P14, golden cases G18–G21, shadow ticket H-1175 now right).
+- **Fix per-IP rate limiting on Railway** (`TRUST_PROXY_HOPS`, §8).
 - **Real Paytm PG sandbox** behind the `PaytmPg` interface (`integrations/paytm.ts`), with checksum signing.
 - **Persistent rooms** (state in SQLite or Redis) so restarts don't wipe sessions.
 - **Wait-for-CI on Railway** and branch protection on `main` (PRs plus a required CI check).
 - **LLM evals in CI** behind a secret, run nightly.
-- Guided **demo mode** and a **judge view** in the frontend (§6).
+- A **judge view** in the frontend (§6). The guided demo card and the Analytics page already exist.
 
 ### Later / pitch roadmap
 - Hindi/Kannada voice end to end on WhatsApp (Sarvam ASR → agent → Sarvam TTS voice note back).
@@ -325,7 +355,8 @@ Locally: `.env` at the repo root. On Railway: `railway variables --service resol
 - **"Data privacy?"** PII is tokenised before the model, encrypted per case and crypto-shredded at close; outbound leak scanning.
 - **"How fast?"** First action in ~1–7 ms of compute with the planner; with Groq the model call is shown per step. The animation pacing is deliberate.
 - **"Numbers?"** 60–70% auto-resolve, minutes not days, −40% repeat contacts, zero missed deadlines are **targets** for the shadow pilot. The ₹2.46 Cr/month unit economics uses illustrative inputs.
-- **Be upfront about the gap:** there's no duplicate-debit flow yet, and the agent escalates those safely.
+- **"Where is the proof?"** Open `/app/analytics` (or the Proof section on the landing page): every figure is computed live by the server. Be upfront about the limits it lists: synthetic tickets, a planner written against them, time to a decision rather than time to money, and 14 tickets is too few for a confidence interval.
+- **Be upfront about the gaps:** the LLM path has never run against a real model, and the per-IP rate limiter is not confirmed effective behind Railway.
 
 ---
 

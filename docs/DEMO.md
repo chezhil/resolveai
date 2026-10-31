@@ -45,6 +45,8 @@ Click **E**: a stuck payment is caught on the event stream and the merchant hear
 
 **Evals & shadow** tab → **Run with offline planner** (or Groq → Gemini if keys are set): 35/35 golden cases, including 11 red-team attacks (forged and replayed capabilities, double approval, message floods, repeated injection, least privilege, velocity, history rewrite, PII leaks), asserted on the ledger, settlement and dispute systems. In the shadow replay the agent makes the right call on 100% of tickets vs 79% for humans. Be upfront that the 14 tickets are synthetic.
 
+**Analytics** tab (60 seconds): the evidence on one page, computed live. Point at 14/14 right calls against 11/14 for humans, the time-to-decision chart, and the cards where a human got it wrong (a payout change on chat that was an account takeover: the agent attempted it, policy blocked it, and it escalated). Press **Run all demo scenarios** and show the session charts fill. Open **Method and limits** and say it out loud: synthetic tickets, time to a decision rather than time to money.
+
 **Audit log** → **Tamper: rewrite chain**: the attacker re-hashes everything so the chain still says *valid*, yet the published anchors flag the rewrite. Say: "even someone with database access can't rewrite history quietly."
 
 **Impact** tab → *Security posture*: signed capabilities issued and refused, PII vaults shredded, anchors published, first-action latency.

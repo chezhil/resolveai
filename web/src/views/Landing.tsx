@@ -14,6 +14,11 @@ import { LangSwitch } from "../components/LangSwitch";
 import { GraphPanel } from "../components/landing/GraphPanel";
 import { CopyBlock } from "./Plugins";
 import { summarise, useEvalReport } from "../lib/analytics";
+import { HowItWorks } from "../components/landing/HowItWorks";
+import { AutonomyLadder } from "../components/landing/AutonomyLadder";
+import { ProofCharts } from "../components/landing/ProofCharts";
+import { Faq } from "../components/landing/Faq";
+import { SiteFooter } from "../components/landing/SiteFooter";
 
 gsap.registerPlugin(ScrollTrigger);
 
@@ -26,12 +31,15 @@ function RoomLink({ to, ...props }: { to: string } & Omit<React.ComponentProps<t
 const SECTIONS = [
   { id: "top", label: "Top" },
   { id: "problem", label: "Problem" },
+  { id: "how", label: "How it works" },
   { id: "playground", label: "Playground" },
   { id: "defense", label: "Defence" },
+  { id: "autonomy", label: "Autonomy" },
   { id: "console", label: "Console" },
   { id: "proof", label: "Proof" },
   { id: "languages", label: "Languages" },
   { id: "plugins", label: "Plugins" },
+  { id: "faq", label: "FAQ" },
   { id: "honest", label: "Honest" },
 ];
 
@@ -48,6 +56,7 @@ const REDLINES = [
 
 const SHOTS = [
   { id: "console", label: "Live console", src: "/shots/console.png", text: "The agent trace, the merchant's phone and the case file, updating as the agent works." },
+  { id: "analytics", label: "Analytics", src: "/shots/analytics.png", text: "Every proof chart on one page: the agent against human agents on replayed tickets, the golden suite by category, and what the policy engine refused." },
   { id: "quarantine", label: "Quarantine", src: "/shots/quarantine.png", text: "A late bank message pulls the pending refund before anyone can sign it." },
   { id: "provenance", label: "Provenance", src: "/shots/provenance.png", text: "Every case as a graph: facts from tools feed the policy engine, which led to each decision and outcome." },
   { id: "approvals", label: "Approvals", src: "/shots/approvals.png", text: "Humans approve with their own PIN. Above one lakh, two different people must sign." },
@@ -79,6 +88,7 @@ export function Landing() {
 
   return (
     <div ref={root} className="landing">
+      <ScrollProgress />
       <i className="crop tl" aria-hidden />
       <i className="crop tr" aria-hidden />
       <i className="crop bl" aria-hidden />
@@ -99,20 +109,18 @@ export function Landing() {
         <Hero />
         <Stack />
         <Problem />
+        <How />
         <Playground />
         <Defense />
+        <Autonomy />
         <ConsoleTour />
         <Proof />
         <Languages />
         <Plugins />
+        <FaqSection />
         <Honest />
       </main>
-      <footer className="border-t border-ink/15">
-        <div className="mx-auto flex max-w-6xl flex-col gap-2 px-6 py-10 text-[13px] text-text-2">
-          <p>{t("footer.built")}</p>
-          <p>{t("footer.disc")}</p>
-        </div>
-      </footer>
+      <SiteFooter />
     </div>
   );
 }
@@ -130,7 +138,7 @@ function Nav() {
           <span className="font-display text-[20px] font-bold tracking-tight">ResolveAI</span>
         </Link>
         <nav aria-label="Sections" className="ml-8 hidden items-center gap-6 text-[14px] font-medium text-text-2 lg:flex">
-          <a className="hover:text-ink" href="#problem">
+          <a className="hover:text-ink" href="#how">
             {t("nav.how")}
           </a>
           <a className="hover:text-ink" href="#playground">
@@ -141,6 +149,9 @@ function Nav() {
           </a>
           <a className="hover:text-ink" href="#console">
             Console
+          </a>
+          <a className="hidden hover:text-ink xl:inline" href="#proof">
+            Proof
           </a>
           <a className="hover:text-ink" href="#languages">
             {t("nav.languages")}
@@ -213,6 +224,7 @@ function Hero() {
           Watch it contain a late bank message
         </a>
       </div>
+      <HeroProof />
       <div className="hero-panel mt-14">
         <GraphPanel mode="loop" />
       </div>
@@ -242,7 +254,7 @@ function SectionHead({ marker, title, body }: { marker: string; title: React.Rea
       <div className="font-mono text-[12px] text-text-2">
         <span className="mr-2">[{marker}]</span>
       </div>
-      <h2 className="display mt-4 max-w-[22ch] text-[clamp(2.4rem,6vw,4.4rem)]">{title}</h2>
+      <h2 className="display wipe mt-4 max-w-[22ch] text-[clamp(2.4rem,6vw,4.4rem)]">{title}</h2>
       {body && <p className="mt-6 max-w-[56ch] text-[18px] leading-relaxed text-text-2">{body}</p>}
     </div>
   );
@@ -288,11 +300,90 @@ function Problem() {
   );
 }
 
+function How() {
+  return (
+    <section id="how" className="mx-auto max-w-6xl px-6 py-24">
+      <SectionHead marker="02" title={<>Five steps. Every case.</>} body="Hear, plan, check, act, verify. The same loop runs for a failed payment, a held settlement and a chargeback, and every step is on the record." />
+      <HowItWorks />
+    </section>
+  );
+}
+
+function Autonomy() {
+  return (
+    <section id="autonomy" className="border-y border-ink/15 bg-white/50 py-24">
+      <div className="mx-auto max-w-6xl px-6">
+        <SectionHead marker="05" title={<>How much it may do alone.</>} body="Four levels of autonomy. The model never picks the level: policy does, from the amount, the risk signals and who is allowed to act." />
+        <AutonomyLadder />
+      </div>
+    </section>
+  );
+}
+
+function FaqSection() {
+  return (
+    <section id="faq" className="mx-auto max-w-6xl px-6 py-24">
+      <SectionHead marker="10" title={<>Questions people ask first.</>} />
+      <Faq />
+    </section>
+  );
+}
+
+/** Live headline numbers under the hero buttons: the same figures as the Proof section, from the running server. */
+function HeroProof() {
+  const { data } = useEvalReport();
+  const p = data ? summarise(data) : null;
+  if (!p) return <div className="mt-8 h-[34px]" aria-hidden />;
+  const chips: [string, string][] = [
+    [`${p.goldenPassed}/${p.goldenTotal}`, "golden cases"],
+    [`${p.redTeamPassed}/${p.redTeamTotal}`, "red-team attacks blocked"],
+    [`${p.agentCorrect}/${p.tickets}`, "replayed tickets right"],
+  ];
+  return (
+    <a href="#proof" className="rise mt-8 flex flex-wrap items-center gap-2" aria-label="Jump to the evidence">
+      {chips.map(([n, l]) => (
+        <span key={l} className="inline-flex items-center gap-2 rounded-full border border-ink/20 bg-white/70 px-3.5 py-1.5 text-[13px] transition-colors hover:border-ink">
+          <b className="font-display text-[16px]">{n}</b>
+          <span className="text-text-2">{l}</span>
+        </span>
+      ))}
+      <span className="font-mono text-[11.5px] text-text-2">live from the server</span>
+    </a>
+  );
+}
+
+/** A thin bar across the top that fills as the page is read. One rAF-throttled listener, no React state. */
+function ScrollProgress() {
+  const bar = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    let raf = 0;
+    const update = () => {
+      raf = 0;
+      const el = bar.current;
+      if (!el) return;
+      const max = document.documentElement.scrollHeight - innerHeight;
+      el.style.transform = `scaleX(${max > 0 ? Math.min(1, scrollY / max) : 0})`;
+    };
+    const on = () => {
+      if (!raf) raf = requestAnimationFrame(update);
+    };
+    update();
+    addEventListener("scroll", on, { passive: true });
+    addEventListener("resize", on);
+    return () => {
+      removeEventListener("scroll", on);
+      removeEventListener("resize", on);
+      if (raf) cancelAnimationFrame(raf);
+    };
+  }, []);
+  return <div ref={bar} aria-hidden className="scroll-progress" />;
+}
+
 function Playground() {
   return (
     <section id="playground" className="border-y border-ink/15 bg-white/50 py-28">
       <div className="mx-auto max-w-6xl px-6">
-        <SectionHead marker="02" title={<>Break something. We will contain it.</>} body="Click any fact. ResolveAI marks everything built on it and holds what has not run. The same logic runs in the console as scenario H." />
+        <SectionHead marker="03" title={<>Break something. We will contain it.</>} body="Click any fact. ResolveAI marks everything built on it and holds what has not run. The same logic runs in the console as scenario H." />
         <div className="reveal mt-12">
           <GraphPanel mode="play" />
           <p className="mt-4 text-[13px] text-text-2">An illustration of the real behaviour. Run scenario H in the console to see the engine do it with its audit trail.</p>
@@ -327,7 +418,7 @@ function Defense() {
   const L = LAYERS[i];
   return (
     <section id="defense" className="mx-auto max-w-6xl px-6 py-28">
-      <SectionHead marker="03" title={<>Stop it. Refuse it. Verify it.</>} body={t("safety.body")} />
+      <SectionHead marker="04" title={<>Stop it. Refuse it. Verify it.</>} body={t("safety.body")} />
       <div className="reveal mt-12 grid gap-8 lg:grid-cols-[0.8fr_1.2fr]">
         <div role="tablist" aria-label="Layers of defence" className="flex flex-row gap-2 lg:flex-col">
           {LAYERS.map((l, n) => (
@@ -371,7 +462,7 @@ function ConsoleTour() {
   return (
     <section id="console" className="border-y border-ink/15 bg-white/50 py-28">
       <div className="mx-auto max-w-6xl px-6">
-        <SectionHead marker="04" title={<>Every step is on screen.</>} body="Real screenshots of the running console, not mock-ups." />
+        <SectionHead marker="06" title={<>Every step is on screen.</>} body="Real screenshots of the running console, not mock-ups." />
         <div className="reveal mt-12 grid gap-8 lg:grid-cols-[260px_1fr]">
           <div role="tablist" aria-label="Console views" className="scroll-thin flex gap-2 overflow-x-auto lg:flex-col lg:overflow-visible">
             {SHOTS.map((x, n) => (
@@ -462,7 +553,7 @@ function Proof() {
   }, [sig]);
   return (
     <section id="proof" ref={wrap} className="mx-auto max-w-6xl px-6 py-28">
-      <SectionHead marker="05" title={<>Numbers from the harness.</>} body="Every figure below is printed by npm run eval, npm test or npm audit. The cases run against simulated Paytm systems and synthetic tickets." />
+      <SectionHead marker="07" title={<>Numbers from the harness.</>} body="Every figure below is printed by npm run eval, npm test or npm audit. The cases run against simulated Paytm systems and synthetic tickets." />
       <dl className="mt-14 grid grid-cols-2 gap-x-6 gap-y-12 md:grid-cols-5">
         {PROOF.map((p, i) => (
           <div key={i} className="reveal border-t-[1.5px] border-ink pt-4" style={{ ["--d" as string]: `${i * 70}ms` }}>
@@ -484,6 +575,7 @@ function Proof() {
           See every chart and the method <ArrowUpRight size={14} weight="bold" />
         </RoomLink>
       </p>
+      <ProofCharts />
     </section>
   );
 }
@@ -523,7 +615,7 @@ function Plugins() {
   const current = clients.find((c) => c.id === active) ?? clients[0];
   return (
     <section id="plugins" className="mx-auto max-w-6xl px-6 py-28">
-      <SectionHead marker="07" title={<>{t("plug.title")}</>} body={t("plug.body")} />
+      <SectionHead marker="09" title={<>{t("plug.title")}</>} body={t("plug.body")} />
       <div className="reveal mt-12 grid gap-8 lg:grid-cols-[1fr_1fr] lg:items-start">
         <div>
           <div role="tablist" aria-label="MCP clients" className="mb-3 flex flex-wrap gap-2">
@@ -557,7 +649,7 @@ function Honest() {
   return (
     <section id="honest" className="border-t border-ink/15 bg-white/50">
       <div className="mx-auto max-w-6xl px-6 py-28">
-        <SectionHead marker="08" title={<>{t("honest.title")}</>} body={t("honest.body")} />
+        <SectionHead marker="11" title={<>{t("honest.title")}</>} body={t("honest.body")} />
         <div className="mt-12 grid gap-10 md:grid-cols-[1.3fr_1fr]">
           <div className="reveal rounded-[18px] border border-ink/15 bg-white p-7">
             <h3 className="font-display text-[22px] font-bold">Built and tested</h3>

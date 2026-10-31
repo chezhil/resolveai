@@ -1,5 +1,7 @@
 # ResolveAI: README for the next teammate
 
+> **Historical note (31 Oct).** This was written on 30 Oct. Everything in section 1 has since been merged to `main`, and the counts have moved on: **35 golden cases**, 36 unit tests, agent right on 14/14 replay tickets. The current system guide is [HANDOFF.md](HANDOFF.md); the Analytics and proof page is described in [ANALYTICS.md](ANALYTICS.md). Section 4 about pushing still applies.
+
 Read this first, then [HANDOFF.md](HANDOFF.md) (the full system guide from Chezhil). This file covers only what changed after that handoff and what is left. Written 30 Oct 2026, the night before the offline finals on 31 Oct.
 
 ## 1. What changed since HANDOFF.md

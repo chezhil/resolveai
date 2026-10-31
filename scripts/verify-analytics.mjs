@@ -152,6 +152,69 @@ ok('re-run evidence keeps 14/14 and 35/35', /14\/14/.test(await p.locator('main'
   ok('metrics reflect the session (cases>=3, resolved>=1)', m.cases >= 3 && m.resolved >= 1, JSON.stringify({ cases: m.cases, resolved: m.resolved, escalated: m.escalated }));
 }
 
+// 12 landing page: the sections, the motion and its robustness
+{
+  const q = await page();
+  await q.p.goto(`${BASE}/?room=${q.room}`); await q.p.waitForTimeout(3000);
+  await q.p.addStyleTag({ content: 'html{scroll-behavior:auto!important}' });
+  for (const id of ['how', 'autonomy', 'proof', 'faq', 'honest']) ok(`landing has the #${id} section`, (await q.p.locator('#' + id).count()) === 1);
+  ok('hero shows live proof chips from the server', (await q.p.locator('a[aria-label="Jump to the evidence"]').count()) === 1);
+  ok('footer links the source, docs and analytics', (await q.p.locator('footer a[href*="github.com/chezhil/resolveai"]').count()) >= 3 && (await q.p.locator('footer a[href*="/app/analytics"]').count()) === 1);
+
+  // how it works: the pinned stage rail follows the scroll
+  await q.p.evaluate(() => document.getElementById('how').scrollIntoView({ block: 'start' })); await q.p.waitForTimeout(1500);
+  const first = (await q.p.locator('#how [role=tab][aria-selected=true]').innerText()).trim();
+  await q.p.evaluate(() => scrollBy(0, 1500)); await q.p.waitForTimeout(1500);
+  const later = (await q.p.locator('#how [role=tab][aria-selected=true]').innerText()).trim();
+  ok('how it works: the active stage advances as you scroll', first !== later, `${first} -> ${later}`);
+  ok('how it works: the trace window has lines for the stage', (await q.p.locator('#how .trace-line').count()) >= 3);
+
+  // the scroll progress bar moves
+  const prog = await q.p.evaluate(() => document.querySelector('.scroll-progress')?.style.transform || '');
+  ok('scroll progress bar has advanced', /scaleX\(0\.\d+|scaleX\(1\)/.test(prog), prog);
+
+  // FAQ opens and closes
+  await q.p.evaluate(() => document.getElementById('faq').scrollIntoView({ block: 'start' })); await q.p.waitForTimeout(1200);
+  const d = q.p.locator('#faq details').first();
+  await d.locator('summary').click(); await q.p.waitForTimeout(400);
+  ok('FAQ item opens', await d.evaluate((n) => n.open));
+  await d.locator('summary').click(); await q.p.waitForTimeout(300);
+  ok('FAQ item closes', !(await d.evaluate((n) => n.open)));
+
+  // robustness: an instant jump past everything, then back, must not leave blank areas (IntersectionObserver never fires for skipped items)
+  await q.p.evaluate(() => scrollTo(0, 0)); await q.p.waitForTimeout(400);
+  await q.p.evaluate(() => scrollTo(0, document.documentElement.scrollHeight)); await q.p.waitForTimeout(600);
+  await q.p.evaluate(() => document.getElementById('how').scrollIntoView({ block: 'start' })); await q.p.waitForTimeout(1200);
+  const hidden = await q.p.evaluate(() => [...document.querySelectorAll('.reveal:not(.in)')].filter((n) => { const r = n.getBoundingClientRect(); return r.bottom > 0 && r.top < innerHeight * 0.9; }).length);
+  ok('after a fast jump and back, nothing visible is left hidden', hidden === 0, 'hidden=' + hidden);
+  const steps = await q.p.evaluate(() => [...document.querySelectorAll('#how ol > li')].map((li) => Number(getComputedStyle(li).opacity)));
+  ok('how it works: every step is visible after jumping around', steps.length === 5 && steps.every((o) => o > 0.9), steps.join(','));
+
+  // a deep link lands mid-page with everything above it revealed
+  const dl = await page();
+  await dl.p.goto(`${BASE}/?room=${dl.room}#faq`); await dl.p.waitForTimeout(3000);
+  const aboveHidden = await dl.p.evaluate(() => [...document.querySelectorAll('.reveal:not(.in)')].filter((n) => n.getBoundingClientRect().top < innerHeight).length);
+  ok('deep link /#faq: nothing above the fold is hidden', aboveHidden === 0, 'hidden=' + aboveHidden);
+
+  // reduced motion: all content shown, no hidden ladder cards
+  const rm = await b.newContext({ viewport: { width: 1440, height: 900 }, reducedMotion: 'reduce' });
+  const r = await rm.newPage(); r.on('pageerror', (e) => errs.push(String(e)));
+  await r.goto(`${BASE}/?room=rm2`); await r.waitForTimeout(2500);
+  await r.evaluate(() => document.getElementById('autonomy').scrollIntoView({ block: 'start' })); await r.waitForTimeout(800);
+  const cards = await r.evaluate(() => [...document.querySelectorAll('#autonomy .ladder-step')].map((c) => Number(getComputedStyle(c).opacity)));
+  ok('reduced motion: all four autonomy cards are visible at once', cards.length === 4 && cards.every((o) => o === 1), cards.join(','));
+  ok('reduced motion: the progress bar is hidden', (await r.evaluate(() => getComputedStyle(document.querySelector('.scroll-progress')).display)) === 'none');
+
+  // phone width
+  const m = await page(390);
+  await m.p.goto(`${BASE}/?room=${m.room}`); await m.p.waitForTimeout(3000);
+  await m.p.addStyleTag({ content: 'html{scroll-behavior:auto!important}' });
+  const H = await m.p.evaluate(() => document.documentElement.scrollHeight);
+  for (let y = 0; y < H; y += 600) { await m.p.evaluate((v) => scrollTo(0, v), y); await m.p.waitForTimeout(80); }
+  ok('390px landing: no horizontal overflow', (await m.p.evaluate(() => document.documentElement.scrollWidth - innerWidth)) <= 0);
+  ok('390px landing: every reveal landed after scrolling through', (await m.p.evaluate(() => document.querySelectorAll('.reveal:not(.in)').length)) === 0);
+}
+
 console.log(results.map(r => `${r[0]}  ${r[1]}${r[2] ? '  [' + r[2] + ']' : ''}`).join('\n'));
 const fails = results.filter(r => r[0] === 'FAIL').length;
 const unexpected = bad.filter(x => !/^429 .*\/api\/proof/.test(x));

@@ -146,7 +146,7 @@ The model is treated as untrusted. Seven independent layers sit between what it 
 | Layer | What it does | Where / proof |
 |---|---|---|
 | **Signed capabilities** | When policy allows an action, it mints a single-use, 60-second HMAC token bound to the exact tool, arguments, case and approvers. Action tools refuse to run without one. A forged, replayed or edited call can't move money even if the model is compromised. | [`core/capability.ts`](server/src/core/capability.ts); R01–R03 |
-| **Deterministic policy, L0–L3** | 14 rules (P0–P13): grounding in tool facts (P3), value tiers (P4), never change payouts (P1), risk flags force L3 (P2), injection removes L1 autonomy (P10), **least privilege per workflow (P11)**, **24h velocity limit (P12)** | [`policy/engine.ts`](server/src/policy/engine.ts); G02–G09, R07, R08 |
+| **Deterministic policy, L0–L3** | 15 rules (P0–P14): grounding in tool facts (P3), value tiers (P4), never change payouts (P1), risk flags force L3 (P2), injection removes L1 autonomy (P10), **least privilege per workflow (P11)**, **24h velocity limit (P12)** | [`policy/engine.ts`](server/src/policy/engine.ts); G02–G09, R07, R08 |
 | **Two-person rule** | Above ₹1,00,000 an approval needs two *different* humans; the agent can never approve | P13 in `decideApproval`; G03, R04 |
 | **Prompt-injection defence** | Customer text quoted as untrusted data; runtime events carry a per-case nonce; injection attempts are flagged and repeated ones mark the account high-risk | `quoteUntrusted`, `screenInbound`; G14–G16, R06 |
 | **Rate limiting & anomaly flags** | Per-merchant message limits (8 per 10 min) with `INBOUND_FLOOD` flagging, plus per-IP API limits on the public deploy | `screenInbound`, `limiter()`; R05 |
@@ -155,6 +155,12 @@ The model is treated as untrusted. Seven independent layers sit between what it 
 | **Degraded mode** | Model outage → circuit breaker → deterministic planner keeps resolving through the same policy engine; takeover only before any action, otherwise human queue with the case file | `takeover()`, `failSafe()`; G12, G23, G24 |
 
 **Fast:** every step in the trace shows its compute time (⚡), and the dashboard reports p50/p95 time to the first action. With the offline planner the agent proposes its first action in **about 1–7 ms of compute**; with Groq the model call dominates and is shown per step. The demo's step-by-step animation is deliberate pacing and is excluded from these numbers.
+
+## Analytics and proof
+
+![Analytics and proof](docs/media/08-analytics.png)
+
+Open **`/app/analytics`** for the evidence on one page, computed live by the running server (nothing is typed in): the agent against human agents on 14 replayed tickets (**14/14 vs 11/14 right**, median **28 h vs 17 s** to a decision), a ticket-by-ticket timeline, the cards where a human got it wrong and what the agent did instead, the 35-case golden suite by category, what the policy engine refused, this session's live charts, and a capability comparison with the method and its limits written out. The same headline numbers are on the landing page, fetched from `GET /api/proof` (one shared, cached run). Details and how to read it honestly: [docs/ANALYTICS.md](docs/ANALYTICS.md).
 
 ## Evals
 
@@ -170,7 +176,8 @@ npm run eval
 - **35 golden cases** (workflows, guardrails, prompt injection, proactive, resilience, and 11 red-team attacks). Each one runs in a fresh, isolated simulated world and asserts on the **systems of record** (ledger credited, settlement UTR, dispute ack, payout account unchanged), not on the agent's text.
 - **Shadow replay** runs the agent with actions recorded but not executed on 14 historical tickets, scored against the action an ops reviewer marked as the right call. Current result: the **agent makes the right call on 100%, the human agents on 79%**, and the two agree on 86%. Six tickets are deliberately hard: an account takeover a human fell for, a refund that should have been a push credit, a ticket raised for a payment that didn't exist. The last gap, duplicate debits, is closed by the duplicate-debit workflow (policy P14: refund only the later of two identical credited payments from one payer). The tickets are synthetic stand-ins for the anonymised set we'd request from Paytm.
 - `npm run eval -- --llm` runs the same golden cases against Groq/Gemini.
-- CI ([.github/workflows/ci.yml](.github/workflows/ci.yml)) typechecks and runs tests and evals on every push.
+- CI ([.github/workflows/ci.yml](.github/workflows/ci.yml)) typechecks and runs tests, evals, the build and `npm audit` on every push.
+- **Browser gates** (Chrome, against a running server): `node scripts/verify-app.mjs`, `verify-landing.mjs` and `verify-analytics.mjs` check overflow at four widths, that every scroll reveal lands, motion and reduced motion, the Analytics page, `/api/proof`, and the core scenarios end to end.
 
 ## Real channels (optional)
 
@@ -197,14 +204,16 @@ server/src
   channels/      WhatsApp via Twilio
   core/          runtime loop, types, encrypted PII vault, signed capabilities, audit log + anchors, SQLite archive
   integrations/  Paytm PG transaction-status adapter
-  policy/        deterministic policy engine (L0–L3, rules P0–P13)
+  policy/        deterministic policy engine (L0–L3, rules P0–P14)
   tools/         MCP-style tool registry
   sim/           simulated Paytm systems, knowledge base, languages, demo scenarios
   evals/         golden cases, shadow replay, CLI
   voice/         Sarvam ASR/TTS adapter
   rooms.ts       per-visitor isolated runtimes
-web/src          React + Tailwind ops console (live over SSE, works at phone width)
-scripts/         capture.mjs: regenerates the README screenshots and GIF
+web/src          React + Tailwind console and landing page (live over SSE, works at phone width)
+  views/         Landing, Console, Analytics, Approvals, Cases, Evals, Audit, Impact, Plugins, Merchant
+  components/    charts (hand-drawn SVG), landing sections, trace, case panel
+scripts/         capture.mjs: README screenshots and GIF; verify-app / verify-landing / verify-analytics: browser gates
 ```
 
 ## Roadmap: earn trust in stages
@@ -224,7 +233,7 @@ MIT License.
 
 ## Landing page, plugins and belief invalidation
 
-- **Landing page** at `/`, console at `/app`. Seven interface languages (English, Hindi, Kannada, Tamil, Telugu, Marathi, Bengali); the strings need a native-speaker review before launch.
+- **Landing page** at `/`, console at `/app`. The landing page walks the five-step loop (Hear, Plan, Check, Act, Verify) as you scroll, shows the four autonomy levels, a live human-against-agent timeline, an FAQ and a full footer; motion respects `prefers-reduced-motion`. Seven interface languages (English, Hindi, Kannada, Tamil, Telugu, Marathi, Bengali); the strings need a native-speaker review before launch.
 - **MCP server**: `POST /mcp` (Streamable HTTP) or `npx tsx server/src/mcp/stdio.ts`. Seven tools; no money-moving tool is exposed, so every issue goes through policy. Set `MCP_TOKEN` on any public deploy.
 - **Plugins page** (`/app/plugins`): connector status, copyable setup commands, an MCP test and a Sarvam translate test.
 - **Belief invalidation**: every approval records the ledger rows or settlement it rests on. If the bank changes one while a human is deciding (scenario H, "Simulate late bank reversal"), the approval is quarantined, cannot be signed, and the case escalates with the changed fact attached. Covered by golden case G22.
