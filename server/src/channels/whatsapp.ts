@@ -52,6 +52,14 @@ export async function handleInbound(req: Request, res: Response) {
   const from = params.From;
   let text = (params.Body ?? "").trim();
   const room = getRoom(WHATSAPP_ROOM);
+  // One demo merchant serves every sender, so a second phone must not take over replies for a case
+  // that another phone opened.
+  const owner = phones.get(MERCHANT);
+  const busy = [...room.rt.cases.values()].some((c) => c.merchantId === MERCHANT && !["RESOLVED", "ESCALATED", "FAILED_SAFE"].includes(c.status));
+  if (owner && owner !== from && busy) {
+    await send(from, "The demo merchant is busy with another conversation. Please try again in a few minutes.");
+    return res.type("text/xml").send("<Response></Response>");
+  }
   phones.set(MERCHANT, from);
 
   if (Number(params.NumMedia ?? 0) > 0 && String(params.MediaContentType0 ?? "").startsWith("audio/")) {

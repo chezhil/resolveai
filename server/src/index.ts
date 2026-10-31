@@ -63,7 +63,15 @@ const approvers = ApproverAuth.fromEnv();
 
 onAgentMessage(outbound);
 
-const roomOf = (req: express.Request): Room => getRoom(cleanRoomId(req.header("x-room") ?? req.query.room));
+// The room bound to the real WhatsApp number is never reachable from the public API.
+const roomOf = (req: express.Request): Room => {
+  const id = cleanRoomId(req.header("x-room") ?? req.query.room);
+  if (whatsappEnabled() && id === WHATSAPP_ROOM) throw new ClientError("Room not available", 403);
+  return getRoom(id);
+};
+
+// Demo-only routes (audit tampering) are off in production unless DEMO_ENDPOINTS=1.
+const DEMO_ENDPOINTS = process.env.DEMO_ENDPOINTS === "1" || process.env.NODE_ENV !== "production";
 
 const wrap = (fn: (req: express.Request, room: Room) => unknown) => async (req: express.Request, res: express.Response) => {
   try {
@@ -113,6 +121,8 @@ setInterval(() => {
   for (const [k, b] of buckets) if (b.at < cutoff) buckets.delete(k);
 }, 60_000).unref();
 app.post("/api/evals/run", limiter(6, "evals"));
+// Sarvam-backed routes cost real money per call, so they get a much tighter per-IP bucket than other writes.
+app.post(/^\/api\/(voice|translate)(\/|$)/, limiter(Number(process.env.VOICE_RATE_PER_MIN ?? 20), "voice"));
 // Approvals get their own tight bucket so PINs can't be brute-forced at the general write rate.
 app.post("/api/approvals/:id", limiter(Number(process.env.APPROVAL_RATE_PER_MIN ?? 10), "approvals"));
 app.post(/^\/api\/(?!channels).*/, limiter(Number(process.env.WRITE_RATE_PER_MIN ?? 120), "write"));
@@ -161,7 +171,7 @@ app.get("/api/meta", wrap(() => ({
   kb: KB,
   voice: { sarvam: sarvamEnabled() },
   approvals: { pinRequired: approvers.enforced, approvers: approvers.approvers },
-  whatsapp: { enabled: whatsappEnabled(), room: WHATSAPP_ROOM, number: process.env.TWILIO_WHATSAPP_FROM?.replace("whatsapp:", "") ?? null, joinCode: process.env.TWILIO_SANDBOX_JOIN ?? null },
+  whatsapp: { enabled: whatsappEnabled(), number: process.env.TWILIO_WHATSAPP_FROM?.replace("whatsapp:", "") ?? null, joinCode: process.env.TWILIO_SANDBOX_JOIN ?? null },
 })));
 
 app.post("/api/inbound", wrap((q, { rt }) => {
@@ -178,10 +188,20 @@ app.post("/api/scenarios/:id", wrap((q, { rt }) => {
 
 // The approver comes from the PIN when PINs are configured; `by` in the body is only used when
 // approver identity is simulated (no PINs set).
+const signerIps = new Map<string, Set<string>>();
 app.post("/api/approvals/:id", wrap((q, { rt }) => {
   const { decision, by, pin } = parseBody(ApprovalBody, q.body);
   const who = approvers.resolve({ by, pin });
-  return { ...rt.decideApproval(String(q.params.id), decision, who.by), identitySimulated: who.simulated };
+  // Simulated identities are self-claimed, so the two-person rule (P13) is enforced per client address:
+  // one address cannot supply both signatures by claiming two names.
+  const ip = q.ip ?? "unknown";
+  const key = `${q.header("x-room") ?? q.query.room ?? ""}/${q.params.id}`;
+  const signed = signerIps.get(key) ?? new Set<string>();
+  const track = who.simulated && decision === "APPROVED";
+  if (track && signed.has(ip)) throw new ClientError("Two-person rule: a second, different approver must confirm from another client", 409);
+  const result = rt.decideApproval(String(q.params.id), decision, who.by);
+  if (track) signerIps.set(key, signed.add(ip));
+  return { ...result, identitySimulated: who.simulated };
 }));
 app.post("/api/cases/:id/csat", wrap((q, { rt }) => rt.rate(String(q.params.id), parseBody(CsatBody, q.body).score)));
 app.post("/api/clock/advance", wrap((q, { rt }) => {
@@ -218,6 +238,7 @@ app.post("/api/audit/anchor", wrap((_q, { rt }) => {
   return auditView(rt);
 }));
 app.post("/api/audit/tamper", wrap((q, { rt }) => {
+  if (!DEMO_ENDPOINTS) throw new ClientError("Not found", 404);
   // "naive" edits one entry; "rewrite" re-hashes the rest of the chain so only the anchors catch it.
   if (q.body?.mode === "rewrite") rt.audit.rewriteConsistently(Number(q.body?.seq ?? 2));
   else rt.audit.tamper(Number(q.body?.seq ?? 2));
@@ -270,7 +291,13 @@ app.post("/mcp", limiter(Number(process.env.MCP_RATE_PER_MIN ?? 60), "mcp"), asy
     res.status(401).json({ jsonrpc: "2.0", id: null, error: { code: -32001, message: "Unauthorized" } });
     return;
   }
-  const room = getRoom(cleanRoomId(`mcp-${req.header("x-room") ?? "shared"}`));
+  // An open MCP endpoint would let anyone spend LLM quota; production must set MCP_TOKEN.
+  if (!token && process.env.NODE_ENV === "production") {
+    res.status(503).json({ jsonrpc: "2.0", id: null, error: { code: -32001, message: "MCP_TOKEN is not configured" } });
+    return;
+  }
+  // Callers without an explicit room get one per client address, not a shared one.
+  const room = getRoom(cleanRoomId(`mcp-${req.header("x-room") ?? req.ip}`));
   const batch: unknown[] = Array.isArray(req.body) ? req.body : [req.body];
   const out = (await Promise.all(batch.map((m) => handleMcp((m ?? {}) as never, room)))).filter(Boolean);
   if (!out.length) {

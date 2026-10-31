@@ -23,6 +23,8 @@ const KEY = process.env.ANCHOR_SIGNING_KEY ? Buffer.from(process.env.ANCHOR_SIGN
 const EVERY = Number(process.env.ANCHOR_EVERY ?? 10);
 const disabled = process.env.ARCHIVE === "off" || process.env.VITEST === "true";
 
+const signAnchor = (body: Omit<Anchor, "sig" | "sinks">) => createHmac("sha256", KEY).update(JSON.stringify(body)).digest("hex");
+
 let gistQueue: Promise<unknown> = Promise.resolve();
 
 function toGist(line: string) {
@@ -33,13 +35,17 @@ function toGist(line: string) {
   // Serialise writes so concurrent anchors don't overwrite each other.
   gistQueue = gistQueue
     .then(async () => {
-      const g = await (await fetch(`https://api.github.com/gists/${id}`, { headers })).json();
+      const get = await fetch(`https://api.github.com/gists/${id}`, { headers });
+      // Never rewrite the history from an empty base: a failed read must abort the append.
+      if (!get.ok) throw new Error(`gist read ${get.status}`);
+      const g = await get.json();
       const prev = g.files?.["resolveai-anchors.jsonl"]?.content ?? "";
-      await fetch(`https://api.github.com/gists/${id}`, {
+      const patch = await fetch(`https://api.github.com/gists/${id}`, {
         method: "PATCH",
         headers,
         body: JSON.stringify({ files: { "resolveai-anchors.jsonl": { content: prev + line + "\n" } } }),
       });
+      if (!patch.ok) throw new Error(`gist write ${patch.status}`);
     })
     .catch((e) => console.warn(`[anchor] gist sink failed: ${(e as Error).message}`));
   return true;
@@ -60,7 +66,7 @@ export class AnchorLog {
     const head = audit.head();
     if (!head || this.anchors.at(-1)?.seq === head.seq) return this.anchors.at(-1) ?? null;
     const body = { n: this.anchors.length + 1, label: this.label, seq: head.seq, hash: head.hash, at: new Date().toISOString() };
-    const sig = createHmac("sha256", KEY).update(JSON.stringify(body)).digest("hex");
+    const sig = signAnchor(body);
     const sinks = ["memory"];
     const line = JSON.stringify({ ...body, sig });
     if (!disabled) {
@@ -82,7 +88,9 @@ export class AnchorLog {
   /** Every published anchor must still match the chain at its sequence number. */
   check(audit: AuditLog) {
     const entries = audit.list();
-    const mismatched = this.anchors.filter((a) => entries[a.seq - 1]?.hash !== a.hash).map((a) => a.n);
+    const mismatched = this.anchors
+      .filter((a) => entries[a.seq - 1]?.hash !== a.hash || a.sig !== signAnchor({ n: a.n, label: a.label, seq: a.seq, hash: a.hash, at: a.at }))
+      .map((a) => a.n);
     return { anchors: this.anchors.length, ok: mismatched.length === 0, mismatched };
   }
 }

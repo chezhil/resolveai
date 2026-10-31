@@ -187,7 +187,7 @@ export interface Meta {
   voice: { sarvam: boolean };
   /** pinRequired: approvers sign with a PIN checked on the server; otherwise identity is simulated. */
   approvals?: { pinRequired: boolean; approvers: string[] };
-  whatsapp: { enabled: boolean; room: string; number: string | null; joinCode: string | null };
+  whatsapp: { enabled: boolean; number: string | null; joinCode: string | null };
 }
 
 export interface AuditEntry {
