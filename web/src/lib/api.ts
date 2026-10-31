@@ -68,6 +68,7 @@ export interface Case {
   csat?: number;
   timing: { computeMs: number; firstActionMs?: number };
   pii?: { items: number; cipher: string; shredded: boolean };
+  tat?: { rule: string; deadlineAt: number; state: "met" | "running" | "breached"; penaltyPerDay: number; hoursLeft: number };
 }
 
 export interface Approval {
@@ -78,7 +79,9 @@ export interface Approval {
   amount?: number;
   summary: string;
   rationale: string;
-  status: "PENDING" | "APPROVED" | "REJECTED";
+  status: "PENDING" | "APPROVED" | "REJECTED" | "QUARANTINED";
+  dependsOn?: { ref: string; kind: "txn" | "settlement"; label: string; fingerprint: string }[];
+  quarantine?: { at: number; reason: string; changed: { ref: string; label: string; was: string; now: string }[] };
   required: number;
   approvals: { by: string; at: number }[];
   createdAt: number;

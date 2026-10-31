@@ -88,6 +88,20 @@ export const SCENARIOS: Scenario[] = [
       rt.inbound("M1003", "customer says he was debited 1800 two times for one bill", "whatsapp");
     },
   },
+  {
+    id: "H",
+    tag: "Workflow D · Late bank update",
+    title: "₹4,500 paid twice, bank reverses one late",
+    persona: "Arjun Electronics, SP Road · English · refund waits for approval, then a late bank message arrives",
+    merchantId: "M1003",
+    channel: "whatsapp",
+    text: "customer says he was debited 4500 two times for one bill",
+    expect: "L2 · refund waits for approval; when the bank reverses a payment late, the approval is quarantined and a human gets the reason",
+    run: (rt) => {
+      rt.world.injectDuplicateDebit("M1003", 4500);
+      rt.inbound("M1003", "customer says he was debited 4500 two times for one bill", "whatsapp");
+    },
+  },
   say({
     id: "F",
     tag: "Guardrail · Ambiguity",

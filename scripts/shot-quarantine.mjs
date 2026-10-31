@@ -1,0 +1,18 @@
+import { chromium } from "playwright-core";
+const BASE = process.argv[2] ?? "http://localhost:5173";
+const b = await chromium.launch({ executablePath: "C:/Program Files/Google/Chrome/Application/chrome.exe", headless: true });
+const p = await b.newPage({ viewport: { width: 1600, height: 1000 } });
+const errs = [];
+p.on("pageerror", (e) => errs.push(e.message));
+await p.goto(`${BASE}/app?room=q-${Date.now().toString(36)}`);
+await p.getByText("Demo scenarios").waitFor();
+await p.getByLabel("Brain").selectOption("planner");
+await p.getByRole("button", { name: /4,500 paid twice/ }).first().click();
+await p.getByText("Rests on these facts").waitFor({ timeout: 15000 });
+await p.screenshot({ path: "docs/media/check-approval-deps.png" });
+await p.getByRole("button", { name: "Simulate late bank reversal" }).click();
+await p.getByText("Belief invalidated").first().waitFor({ timeout: 10000 });
+await p.waitForTimeout(800);
+await p.screenshot({ path: "docs/media/check-quarantine.png" });
+console.log("errors", JSON.stringify(errs));
+await b.close();

@@ -3,15 +3,15 @@
 // Dials: variance 7, motion 6, density 4. One theme (dark), one radius system (cards 16, controls 10).
 
 import { useState } from "react";
-import { Link } from "react-router";
+import { Link, useLocation } from "react-router";
 import { ArrowRight, Plugs, SealCheck, ShieldCheck, Translate } from "@phosphor-icons/react";
 import { useI18n } from "../lib/i18n";
 import { useReveal } from "../lib/reveal";
 import { LangSwitch } from "../components/LangSwitch";
 import { Pipeline } from "../components/Pipeline";
+import { HowPinned } from "../components/landing/HowPinned";
+import { BeliefChain } from "../components/landing/BeliefChain";
 import { CopyBlock } from "./Plugins";
-
-const STAGES = ["hear", "plan", "check", "act", "verify"] as const;
 
 const REDLINES = [
   { id: "P1", text: "A payout account is never changed from a chat." },
@@ -20,6 +20,12 @@ const REDLINES = [
   { id: "P10", text: "A message that tries to instruct the agent forces a human approval." },
   { id: "P13", text: "Above ₹1,00,000, two different people must approve." },
 ];
+
+/** Router link that keeps the query string, so ?room=judges survives landing -> console. */
+function RoomLink({ to, ...props }: { to: string } & Omit<React.ComponentProps<typeof Link>, "to">) {
+  const { search } = useLocation();
+  return <Link to={{ pathname: to, search }} {...props} />;
+}
 
 const GREETINGS = ["नमस्ते", "ನಮಸ್ಕಾರ", "வணக்கம்", "నమస్కారం", "नमस्कार", "নমস্কার", "નમસ્તે", "ਸਤ ਸ੍ਰੀ ਅਕਾਲ", "നമസ്കാരം", "ନମସ୍କାର", "Hello"];
 
@@ -34,7 +40,8 @@ export function Landing() {
       <main>
         <Hero />
         <Proof />
-        <How />
+        <HowPinned />
+        <BeliefChain />
         <Console />
         <Safety />
         <Languages />
@@ -57,10 +64,10 @@ function Nav() {
   return (
     <header className="sticky top-0 z-30 border-b border-night-line bg-night/85 backdrop-blur">
       <div className="mx-auto flex h-16 max-w-6xl items-center gap-4 px-5">
-        <Link to="/" className="flex shrink-0 items-center gap-2" aria-label="ResolveAI home">
+        <RoomLink to="/" className="flex shrink-0 items-center gap-2" aria-label="ResolveAI home">
           <span className="grid h-8 w-8 place-items-center rounded-[10px] bg-cyan text-sm font-bold text-night">R</span>
           <span className="text-lg font-semibold tracking-tight">ResolveAI</span>
-        </Link>
+        </RoomLink>
         <nav aria-label="Sections" className="ml-6 hidden items-center gap-6 text-[14px] text-fog-muted md:flex">
           <a className="hover:text-fog" href="#how">
             {t("nav.how")}
@@ -77,10 +84,10 @@ function Nav() {
         </nav>
         <div className="ml-auto flex items-center gap-2">
           <LangSwitch dark />
-          <Link to="/app" className="btn-primary hidden items-center gap-1.5 whitespace-nowrap px-4 py-2 text-[14px] sm:inline-flex">
+          <RoomLink to="/app" className="btn-primary hidden items-center gap-1.5 whitespace-nowrap px-4 py-2 text-[14px] sm:inline-flex">
             {t("nav.cta")}
             <ArrowRight size={16} weight="bold" aria-hidden />
-          </Link>
+          </RoomLink>
         </div>
       </div>
     </header>
@@ -104,10 +111,10 @@ function Hero() {
           {t("hero.sub")}
         </p>
         <div className="reveal mt-9 flex flex-wrap items-center gap-3" style={{ ["--d" as string]: "360ms" }}>
-          <Link to="/app" className="btn-primary inline-flex items-center gap-2 whitespace-nowrap px-6 py-3 text-[15px]">
+          <RoomLink to="/app" className="btn-primary inline-flex items-center gap-2 whitespace-nowrap px-6 py-3 text-[15px]">
             {t("hero.cta1")}
             <ArrowRight size={18} weight="bold" aria-hidden />
-          </Link>
+          </RoomLink>
           <a href="#safety" className="btn-ghost inline-flex items-center whitespace-nowrap px-6 py-3 text-[15px]">
             {t("hero.cta2")}
           </a>
@@ -141,23 +148,6 @@ function Proof() {
         </dl>
         <p className="reveal mt-8 max-w-[70ch] text-[13px] text-fog-muted">{t("proof.note")}</p>
       </div>
-    </section>
-  );
-}
-
-function How() {
-  const { t } = useI18n();
-  return (
-    <section id="how" className="mx-auto max-w-6xl px-5 py-24">
-      <h2 className="reveal max-w-[18ch] text-3xl font-semibold tracking-tight md:text-5xl">{t("how.title")}</h2>
-      <ol className="mt-14 grid grid-cols-1 gap-x-8 gap-y-10 md:grid-cols-5">
-        {STAGES.map((s, i) => (
-          <li key={s} className="reveal border-t border-night-line pt-5" style={{ ["--d" as string]: `${i * 90}ms` }}>
-            <h3 className="text-xl font-semibold">{t(`how.${s}`)}</h3>
-            <p className="mt-2 text-[14px] leading-relaxed text-fog-muted">{t(`how.${s}.d`)}</p>
-          </li>
-        ))}
-      </ol>
     </section>
   );
 }
@@ -248,10 +238,10 @@ function Plugins() {
           <Plugs size={36} weight="duotone" className="reveal text-cyan" aria-hidden />
           <h2 className="reveal mt-5 text-3xl font-semibold tracking-tight md:text-5xl">{t("plug.title")}</h2>
           <p className="reveal mt-6 max-w-[52ch] text-lg leading-relaxed text-fog-muted">{t("plug.body")}</p>
-          <Link to="/app/plugins" className="reveal mt-8 inline-flex items-center gap-2 text-[15px] font-semibold text-cyan hover:underline">
+          <RoomLink to="/app/plugins" className="reveal mt-8 inline-flex items-center gap-2 text-[15px] font-semibold text-cyan hover:underline">
             {t("plug.more")}
             <ArrowRight size={16} weight="bold" aria-hidden />
-          </Link>
+          </RoomLink>
         </div>
         <div className="reveal self-center">
           <div role="tablist" aria-label="MCP clients" className="mb-3 flex flex-wrap gap-2">
@@ -315,10 +305,10 @@ function FinalCta() {
     <section className="border-t border-night-line bg-night-2/60">
       <div className="mx-auto flex max-w-6xl flex-col items-start gap-8 px-5 py-24 md:flex-row md:items-center md:justify-between">
         <h2 className="reveal max-w-[20ch] text-3xl font-semibold tracking-tight md:text-5xl">{t("cta.title")}</h2>
-        <Link to="/app" className="btn-primary reveal inline-flex items-center gap-2 whitespace-nowrap px-7 py-3.5 text-base">
+        <RoomLink to="/app" className="btn-primary reveal inline-flex items-center gap-2 whitespace-nowrap px-7 py-3.5 text-base">
           {t("cta.btn")}
           <ArrowRight size={18} weight="bold" aria-hidden />
-        </Link>
+        </RoomLink>
       </div>
     </section>
   );

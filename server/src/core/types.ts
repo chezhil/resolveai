@@ -50,6 +50,14 @@ export interface Fact {
   at: number;
 }
 
+/** One fact an action depends on: a ledger row or settlement batch, with a fingerprint of its state. */
+export interface Dependency {
+  ref: string;
+  kind: "txn" | "settlement";
+  label: string;
+  fingerprint: string;
+}
+
 export interface Approval {
   id: string;
   caseId: string;
@@ -58,7 +66,11 @@ export interface Approval {
   amount?: number;
   summary: string;
   rationale: string;
-  status: "PENDING" | "APPROVED" | "REJECTED";
+  status: "PENDING" | "APPROVED" | "REJECTED" | "QUARANTINED";
+  /** Facts in the systems of record this proposal rests on, as they were when it was proposed. */
+  dependsOn?: Dependency[];
+  /** Set when a fact behind the proposal changed while it waited for a human. */
+  quarantine?: { at: number; reason: string; changed: { ref: string; label: string; was: string; now: string }[] };
   /** Distinct human approvers needed (two-person rule above the threshold). */
   required: number;
   approvals: { by: string; at: number }[];
@@ -123,4 +135,6 @@ export interface Case {
   /** Compute time spent on the case, and how long until the first action was proposed. */
   timing: { computeMs: number; firstActionMs?: number };
   pii?: { items: number; cipher: string; shredded: boolean };
+  /** Turnaround clock for a debited-but-not-credited payment (RBI harmonised TAT: T+1, then compensation per day). */
+  tat?: { rule: string; deadlineAt: number; state: "met" | "running" | "breached"; penaltyPerDay: number; hoursLeft: number };
 }

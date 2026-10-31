@@ -35,6 +35,8 @@ export const ClockBody = z.object({
 const lang = z.string().regex(/^[a-z]{2}$/, "language must be a 2-letter code like hi");
 export const TranslateBody = z.object({ text: z.string().trim().min(1).max(1000), from: lang.default("en"), to: lang });
 
+export const LateReversalBody = z.object({ txnId: z.string().trim().regex(/^TXN-\d{4,}$/, "txnId must look like TXN-0001") });
+
 export const CsatBody = z.object({
   score: z.coerce.number().int().min(1).max(5),
 });

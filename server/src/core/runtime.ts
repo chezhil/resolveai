@@ -8,6 +8,7 @@ import type {
   CaseFile,
   Channel,
   ChatMessage,
+  Dependency,
   Lang,
   Level,
   PolicyDecision,
@@ -229,6 +230,69 @@ export class Runtime extends EventEmitter {
     return n;
   }
 
+  // ------------------------------------------------------------------ provenance
+
+  private fingerprint(kind: "txn" | "settlement", ref: string): string {
+    if (kind === "txn") {
+      const t = this.world.txns.get(ref);
+      return t ? `${t.payerDebit}|${t.beneficiaryCredit}|${t.bankStatus}` : "missing";
+    }
+    const s = this.world.settlements.get(ref);
+    return s ? `${s.status}|${s.holdReason ?? ""}` : "missing";
+  }
+
+  /** The ledger rows or settlement batch a proposed action rests on, fingerprinted at proposal time. */
+  private dependenciesFor(tool: string, input: any) {
+    const out: Dependency[] = [];
+    const add = (kind: Dependency["kind"], ref: string, label: string) => out.push({ ref, kind, label, fingerprint: this.fingerprint(kind, ref) });
+    if (tool === "initiate_refund") {
+      const txn = this.world.txns.get(String(input?.txn_id));
+      if (txn) {
+        add("txn", txn.txnId, `Payment ${txn.rrn}, ₹${txn.amount.toLocaleString("en-IN")}`);
+        for (const o of this.world.txns.values()) {
+          if (o.txnId !== txn.txnId && o.merchantId === txn.merchantId && o.payerVpa === txn.payerVpa && o.amount === txn.amount && Math.abs(o.ts - txn.ts) <= 15 * MIN) {
+            add("txn", o.txnId, `Matching payment ${o.rrn}`);
+          }
+        }
+      }
+    }
+    if (tool === "release_settlement_hold") add("settlement", String(input?.batch_id), `Settlement ${input?.batch_id}`);
+    return out;
+  }
+
+  /**
+   * Belief invalidation: if a fact behind a pending approval changed while it waited, quarantine the
+   * approval so no human can sign off on a stale picture, and hand the case to a person with the reason.
+   */
+  revalidateApprovals() {
+    let quarantinedAny = false;
+    for (const a of this.approvals.values()) {
+      if (a.status !== "PENDING" || !a.dependsOn?.length) continue;
+      const changed = a.dependsOn
+        .map((d) => ({ d, now: this.fingerprint(d.kind, d.ref) }))
+        .filter((x) => x.now !== x.d.fingerprint)
+        .map((x) => ({ ref: x.d.ref, label: x.d.label, was: x.d.fingerprint, now: x.now }));
+      if (!changed.length) continue;
+      const kase = this.cases.get(a.caseId)!;
+      const reason = `${changed.map((c) => `${c.label} changed from ${c.was} to ${c.now}`).join("; ")}. The pending ${a.tool} rested on the old state.`;
+      quarantinedAny = true;
+      a.status = "QUARANTINED";
+      a.quarantine = { at: this.world.now(), reason, changed };
+      this.audit.append(kase.id, "policy", "approval.quarantined", { approvalId: a.id, tool: a.tool, changed }, this.world.now());
+      this.trace(kase, "CHECK", `Belief invalidated: ${a.id} quarantined`, { level: "L3", detail: reason });
+      this.systemEscalate(kase, reason, "A fact behind the pending action changed (provenance check)");
+    }
+    if (quarantinedAny) this.emitUpdate();
+  }
+
+  /** Demo and test hook: the bank reverses a payment late. Pending approvals that depended on it are quarantined. */
+  lateBankReversal(txnId: string) {
+    const txn = this.world.injectLateReversal(txnId);
+    this.audit.append(null, "bank", "bank.late_reversal", { txnId, rrn: txn.rrn }, this.world.now());
+    this.revalidateApprovals();
+    return txn;
+  }
+
   decideApproval(approvalId: string, decision: "APPROVED" | "REJECTED", by = "ops-lead") {
     const a = this.approvals.get(approvalId);
     if (!a || a.status !== "PENDING") throw new ClientError("Approval not pending", 409);
@@ -274,6 +338,7 @@ export class Runtime extends EventEmitter {
       left -= s;
       this.checkWatchers();
       this.detectStuck();
+      this.revalidateApprovals();
     }
     this.emitUpdate();
   }
@@ -294,6 +359,11 @@ export class Runtime extends EventEmitter {
     this.policy.shadow = this.config.shadow;
     this.audit.append(null, "human:ops-lead", "config.changed", c, this.world.now());
     this.emitUpdate();
+  }
+
+  /** True while the agent is actively working a case (not waiting on a human, a watcher or the clock). */
+  busy() {
+    return [...this.cases.values()].some((c) => c.status === "IN_PROGRESS");
   }
 
   async idle() {
@@ -417,6 +487,7 @@ export class Runtime extends EventEmitter {
         const amount = tool.amount?.(input, ctx);
         const required = (amount ?? 0) > this.policy.twoPersonAbove ? 2 : 1;
         const a: Approval = {
+          dependsOn: this.dependenciesFor(tool.name, input),
           id: `APR-${String(this.seq++).padStart(4, "0")}`,
           caseId: kase.id,
           tool: tool.name,
@@ -787,7 +858,22 @@ export class Runtime extends EventEmitter {
 
   private withPii(c: Case): Case {
     const v = this.vaults.get(c.id);
-    return v ? { ...c, pii: v.stats() } : c;
+    const tat = this.tatFor(c);
+    return { ...c, ...(v ? { pii: v.stats() } : {}), ...(tat ? { tat } : {}) };
+  }
+
+  /** RBI TAT for a payment where the payer was debited but the merchant was not credited: resolve by T+1 or compensate. */
+  private tatFor(c: Case): Case["tat"] {
+    if (c.workflow !== "failed_payment") return undefined;
+    const key = Object.keys(c.facts).find((k) => k.startsWith("txn:"));
+    if (!key) return undefined;
+    const txn = [...this.world.txns.values()].find((t) => t.rrn === key.slice(4));
+    if (!txn || txn.payerDebit !== "SUCCESS") return undefined;
+    const deadlineAt = txn.ts + 24 * HOUR;
+    const base = { rule: "RBI turnaround time: T+1, then ₹100 a day to the customer", deadlineAt, penaltyPerDay: 100 };
+    if (txn.beneficiaryCredit !== "PENDING") return { ...base, state: "met", hoursLeft: 0 };
+    const left = (deadlineAt - this.world.now()) / HOUR;
+    return { ...base, state: left < 0 ? "breached" : "running", hoursLeft: Math.round(left * 10) / 10 };
   }
 
   caseDetail(id: string) {

@@ -54,3 +54,8 @@ Click **E**: a stuck payment is caught on the event stream and the merchant hear
 ## Closing line
 
 > "Not a chatbot. A teammate that gets the job done. L0 to L3 bounded autonomy, minutes not days, and one owner per case to confirmed closure."
+
+## Bonus: a late bank message (scenario H)
+
+Run scenario H (a 4,500 rupee duplicate debit). The refund waits for approval and the card lists the facts it rests on. Click Simulate late bank reversal: the approval is quarantined, cannot be signed, and the case goes to a human with the changed fact attached. Wait for the agent to finish each step before moving the clock.
+

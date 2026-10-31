@@ -221,3 +221,12 @@ scripts/         capture.mjs: regenerates the README screenshots and GIF
 - Business figures in the pitch (1.57 Cr devices, ₹7.1 L Cr GMV) are from Paytm's Q1 FY27 results; the impact numbers are targets.
 
 MIT License.
+
+## Landing page, plugins and belief invalidation
+
+- **Landing page** at `/`, console at `/app`. Seven interface languages (English, Hindi, Kannada, Tamil, Telugu, Marathi, Bengali); the strings need a native-speaker review before launch.
+- **MCP server**: `POST /mcp` (Streamable HTTP) or `npx tsx server/src/mcp/stdio.ts`. Seven tools; no money-moving tool is exposed, so every issue goes through policy. Set `MCP_TOKEN` on any public deploy.
+- **Plugins page** (`/app/plugins`): connector status, copyable setup commands, an MCP test and a Sarvam translate test.
+- **Belief invalidation**: every approval records the ledger rows or settlement it rests on. If the bank changes one while a human is deciding (scenario H, "Simulate late bank reversal"), the approval is quarantined, cannot be signed, and the case escalates with the changed fact attached. Covered by golden case G22.
+- **RBI TAT clock** on failed-payment cases: T+1, then compensation per day.
+- Sarvam AI is used for voice (Saaras, Bulbul) and translation (Mayura) when `SARVAM_API_KEY` is set. None of it has been run against the live API from this repo. ResolveAI is an independent prototype and is not affiliated with Paytm or Sarvam AI.

@@ -102,6 +102,7 @@ interface Scheduled {
 export type WorldEvent =
   | { type: "txn.credit_pending"; txn: Txn }
   | { type: "txn.credited"; txn: Txn }
+  | { type: "txn.late_reversal"; txn: Txn }
   | { type: "settlement.settled"; settlement: Settlement }
   | { type: "soundbox.announce"; announcement: Announcement }
   | { type: "clock"; now: number };
@@ -263,6 +264,16 @@ export class World extends EventEmitter {
     };
     this.txns.set(txn.txnId, txn);
     this.emit("world", { type: "txn.credit_pending", txn } satisfies WorldEvent);
+    return txn;
+  }
+
+  /** A late bank message: the bank reversed this payment to the payer after we had already read it as credited. */
+  injectLateReversal(txnId: string) {
+    const txn = this.txns.get(txnId);
+    if (!txn) throw new Error(`Unknown transaction ${txnId}`);
+    txn.beneficiaryCredit = "REVERSED";
+    txn.bankStatus = "REVERSED_TO_PAYER";
+    this.emit("world", { type: "txn.late_reversal", txn } satisfies WorldEvent);
     return txn;
   }
 

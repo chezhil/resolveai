@@ -23,7 +23,7 @@ import { cleanRoomId, getRoom, onAgentMessage, resetRoom, roomCount, type Room }
 import { archive } from "./core/archive.js";
 import { ClientError } from "./core/errors.js";
 import { ApproverAuth } from "./core/approvers.js";
-import { ApprovalBody, TranslateBody, ClockBody, ConfigBody, CsatBody, InboundBody, StuckPaymentBody, parseBody } from "./http/schemas.js";
+import { ApprovalBody, LateReversalBody, TranslateBody, ClockBody, ConfigBody, CsatBody, InboundBody, StuckPaymentBody, parseBody } from "./http/schemas.js";
 import { WHATSAPP_ROOM, handleInbound, outbound, whatsappEnabled } from "./channels/whatsapp.js";
 
 // In dev the console proxies /api to :8787 (PORT may belong to Vite); in production one process serves both on PORT.
@@ -54,7 +54,9 @@ app.use(
     },
   }),
 );
-app.use(cors());
+// Same-origin by default (the console is served from this process). Set CORS_ORIGIN to a comma-separated
+// allow-list to let another site call the API from a browser. MCP and webhooks are not browser CORS traffic.
+app.use(cors({ origin: process.env.CORS_ORIGIN ? process.env.CORS_ORIGIN.split(",").map((o) => o.trim()) : false }));
 app.use(express.json({ limit: "256kb" }));
 
 const approvers = ApproverAuth.fromEnv();
@@ -183,6 +185,8 @@ app.post("/api/approvals/:id", wrap((q, { rt }) => {
 }));
 app.post("/api/cases/:id/csat", wrap((q, { rt }) => rt.rate(String(q.params.id), parseBody(CsatBody, q.body).score)));
 app.post("/api/clock/advance", wrap((q, { rt }) => {
+  // Moving the clock while the agent is mid-case races its watchers and can leave a stale hand-off note.
+  if (rt.busy()) throw new ClientError("The agent is still working on a case; try again in a moment", 409);
   rt.advance(parseBody(ClockBody, q.body).minutes);
   return { now: rt.world.now() };
 }));
@@ -275,6 +279,14 @@ app.post("/mcp", limiter(Number(process.env.MCP_RATE_PER_MIN ?? 60), "mcp"), asy
   }
   res.json(Array.isArray(req.body) ? out : out[0]);
 });
+
+// Simulated late bank webhook: reverses a payment and quarantines any pending approval that relied on it.
+app.post("/api/events/late-bank-update", wrap((q, { rt }) => {
+  const { txnId } = parseBody(LateReversalBody, q.body);
+  if (!rt.world.txns.has(txnId)) throw new ClientError(`Unknown transaction ${txnId}`, 404);
+  const t = rt.lateBankReversal(txnId);
+  return { txnId: t.txnId, rrn: t.rrn, bankStatus: t.bankStatus };
+}));
 
 app.post("/api/channels/whatsapp/twilio", express.urlencoded({ extended: false }), (req, res) => {
   handleInbound(req, res).catch((e) => {

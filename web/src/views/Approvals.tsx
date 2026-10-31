@@ -9,6 +9,7 @@ export function Approvals({ snap, open }: { snap: Snapshot; open: (id: string) =
   const pinRequired = usePinRequired();
   const pending = snap.approvals.filter((a) => a.status === "PENDING");
   const decided = snap.approvals.filter((a) => a.status !== "PENDING");
+  const quarantined = snap.approvals.filter((a) => a.status === "QUARANTINED");
   const handoffs = snap.cases.filter((c) => c.caseFile);
 
   return (
