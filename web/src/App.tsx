@@ -223,7 +223,10 @@ function DegradedBanner({ snap }: { snap: Snapshot }) {
 function Logo() {
   return (
     <Link to="/" className="flex shrink-0 items-center gap-2" aria-label="ResolveAI home">
-      <span className="grid h-8 w-8 place-items-center rounded-[10px] bg-ink text-sm font-bold text-cyan">R</span>
+      <svg viewBox="34 34 188 188" className="h-8 w-8 shrink-0 text-ink" aria-hidden="true">
+        <path d="M200.3 98.8A78 78 0 1 1 157.2 55.7" fill="none" stroke="currentColor" strokeWidth="26" />
+        <circle cx="183.2" cy="72.8" r="19" fill="currentColor" />
+      </svg>
       <span className="font-display text-xl font-semibold tracking-tight">ResolveAI</span>
       <span className="hidden xl:block">
         <Pill tone="ink">Track 3 · Autonomous AI teammate</Pill>
