@@ -188,6 +188,9 @@ app.post("/api/scenarios/:id", wrap((q, { rt }) => {
 
 // The approver comes from the PIN when PINs are configured; `by` in the body is only used when
 // approver identity is simulated (no PINs set).
+// Opt-in: with simulated identities, refuse a second signature from the same client address. Off by default
+// because a single presenter legitimately plays both approvers in the demo; set approver PINs for real identity.
+const STRICT_TWO_PERSON = process.env.STRICT_TWO_PERSON === "1";
 const signerIps = new Map<string, Set<string>>();
 app.post("/api/approvals/:id", wrap((q, { rt }) => {
   const { decision, by, pin } = parseBody(ApprovalBody, q.body);
@@ -197,7 +200,7 @@ app.post("/api/approvals/:id", wrap((q, { rt }) => {
   const ip = q.ip ?? "unknown";
   const key = `${q.header("x-room") ?? q.query.room ?? ""}/${q.params.id}`;
   const signed = signerIps.get(key) ?? new Set<string>();
-  const track = who.simulated && decision === "APPROVED";
+  const track = STRICT_TWO_PERSON && who.simulated && decision === "APPROVED";
   if (track && signed.has(ip)) throw new ClientError("Two-person rule: a second, different approver must confirm from another client", 409);
   const result = rt.decideApproval(String(q.params.id), decision, who.by);
   if (track) signerIps.set(key, signed.add(ip));

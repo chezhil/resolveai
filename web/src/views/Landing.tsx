@@ -122,7 +122,10 @@ function Nav() {
     <header className="sticky top-0 z-30 border-b border-ink/10 bg-cream/85 backdrop-blur">
       <div className="mx-auto flex h-[68px] max-w-6xl items-center gap-4 px-6">
         <Link to="/" className="flex shrink-0 items-center gap-2.5" aria-label="ResolveAI home">
-          <span className="grid h-9 w-9 place-items-center rounded-[10px] bg-ink font-display text-[17px] font-bold text-mintfill">R</span>
+          <svg viewBox="34 34 188 188" className="h-9 w-9 shrink-0 text-ink" aria-hidden="true">
+            <path d="M200.3 98.8A78 78 0 1 1 157.2 55.7" fill="none" stroke="currentColor" strokeWidth="26" />
+            <circle cx="183.2" cy="72.8" r="19" fill="currentColor" />
+          </svg>
           <span className="font-display text-[20px] font-bold tracking-tight">ResolveAI</span>
         </Link>
         <nav aria-label="Sections" className="ml-8 hidden items-center gap-6 text-[14px] font-medium text-text-2 lg:flex">

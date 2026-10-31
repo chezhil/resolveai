@@ -59,3 +59,11 @@ Click **E**: a stuck payment is caught on the event stream and the merchant hear
 
 Run scenario H (a 4,500 rupee duplicate debit). The refund waits for approval and the card lists the facts it rests on. Click Simulate late bank reversal: the approval is quarantined, cannot be signed, and the case goes to a human with the changed fact attached. Wait for the agent to finish each step before moving the clock.
 
+
+## Railway variables to set before judging
+
+- DEMO_ENDPOINTS=1 keeps the Audit tab's tamper demo working in production (it only touches the visitor's own room).
+- MCP_TOKEN=<a long random string> enables /mcp in production; without it the endpoint answers 503 by design.
+- Leave STRICT_TWO_PERSON unset: one presenter plays both approvers in the demo.
+- Set approver PINs (see .env.example) if you want real approver identity.
+

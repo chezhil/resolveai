@@ -109,7 +109,7 @@ function McpTester({ origin }: { origin: string }) {
         body: JSON.stringify({ jsonrpc: "2.0", id: 1, method: "tools/list" }),
       });
       const j = await res.json();
-      setOut(j.result?.tools?.map((t: { name: string }) => t.name).join("\n") ?? JSON.stringify(j, null, 2));
+      setOut(j.result?.tools?.map((t: { name: string }) => t.name).join("\n") ?? `The server answered: ${j.error?.message ?? res.status}${res.status === 503 || res.status === 401 ? " (MCP needs a token on this deploy)" : ""}`);
     } catch (e) {
       setOut(`Request failed: ${(e as Error).message}`);
     } finally {

@@ -939,11 +939,16 @@ export class Runtime extends EventEmitter {
     if (!key) return undefined;
     const txn = [...this.world.txns.values()].find((t) => t.rrn === key.slice(4));
     if (!txn || txn.payerDebit !== "SUCCESS") return undefined;
-    const deadlineAt = txn.ts + 24 * HOUR;
-    const base = { rule: "RBI turnaround time: T+1, then ₹100 a day to the customer", deadlineAt, penaltyPerDay: 100 };
-    if (txn.beneficiaryCredit !== "PENDING") return { ...base, state: "met", hoursLeft: 0 };
+    const IST = 5.5 * HOUR;
+    const dayStart = Math.floor((txn.ts + IST) / (24 * HOUR)) * 24 * HOUR - IST; // 00:00 IST on the payment day (T)
+    const deadlineAt = dayStart + 2 * 24 * HOUR; // end of T+1
+    const base = { rule: "RBI turnaround time: reverse or credit by the end of T+1, then ₹100 a day to the customer", deadlineAt, penaltyPerDay: 100 };
+    if (txn.beneficiaryCredit !== "PENDING") {
+      const landed = txn.creditedAt ?? this.world.now();
+      return { ...base, state: landed <= deadlineAt ? "met" : "breached", hoursLeft: 0 };
+    }
     const left = (deadlineAt - this.world.now()) / HOUR;
-    return { ...base, state: left < 0 ? "breached" : "running", hoursLeft: Math.round(left * 10) / 10 };
+    return { ...base, state: left < 0 ? "breached" : "running", hoursLeft: Math.max(0, Math.round(left * 10) / 10) };
   }
 
   caseDetail(id: string) {

@@ -35,7 +35,16 @@ export function Audit({ version }: { version: number }) {
     setView(r);
   };
   const load = async () => apply(await api<AuditView>("/audit"));
-  const post = async (path: string, body: unknown = {}) => apply(await api<AuditView>(path, body));
+  const [note, setNote] = useState("");
+  const post = async (path: string, body: unknown = {}) => {
+    setNote("");
+    try {
+      apply(await api<AuditView>(path, body));
+    } catch (e) {
+      const m = (e as Error).message;
+      setNote(/not found/i.test(m) ? "The tamper demo is switched off on this server (set DEMO_ENDPOINTS=1 to enable it)." : m);
+    }
+  };
   useEffect(() => {
     load();
   }, [version]);
@@ -44,6 +53,11 @@ export function Audit({ version }: { version: number }) {
 
   return (
     <div className="space-y-4">
+      {note && (
+        <div role="alert" className="card border-ember bg-ember/20 p-3 text-sm font-semibold">
+          {note}
+        </div>
+      )}
       <div className="card flex flex-wrap items-center justify-between gap-3 p-4">
         <div className="max-w-2xl">
           <div className="label text-muted">Immutable audit log · externally anchored</div>
