@@ -16,12 +16,14 @@ import { RULES } from "./policy/engine.js";
 import { TOOLS } from "./tools/registry.js";
 import { KB } from "./sim/kb.js";
 import { configuredProviders } from "./agent/llm.js";
-import { sarvamEnabled, speak, transcribe } from "./voice/sarvam.js";
+import { SARVAM_LANGS, sarvamEnabled, sarvamModels, speak, transcribe, translate } from "./voice/sarvam.js";
+import { connectors } from "./integrations/registry.js";
+import { handleMcp } from "./mcp/handler.js";
 import { cleanRoomId, getRoom, onAgentMessage, resetRoom, roomCount, type Room } from "./rooms.js";
 import { archive } from "./core/archive.js";
 import { ClientError } from "./core/errors.js";
 import { ApproverAuth } from "./core/approvers.js";
-import { ApprovalBody, ClockBody, ConfigBody, CsatBody, InboundBody, StuckPaymentBody, parseBody } from "./http/schemas.js";
+import { ApprovalBody, TranslateBody, ClockBody, ConfigBody, CsatBody, InboundBody, StuckPaymentBody, parseBody } from "./http/schemas.js";
 import { WHATSAPP_ROOM, handleInbound, outbound, whatsappEnabled } from "./channels/whatsapp.js";
 
 // In dev the console proxies /api to :8787 (PORT may belong to Vite); in production one process serves both on PORT.
@@ -243,6 +245,36 @@ app.post("/api/voice/tts", wrap(async (q) => {
   if (!sarvamEnabled()) throw new ClientError("Set SARVAM_API_KEY to enable server-side TTS", 501);
   return speak(String(q.body?.text ?? ""), String(q.body?.lang ?? "en"));
 }));
+
+app.post("/api/translate", wrap(async (q) => {
+  if (!sarvamEnabled()) throw new ClientError("Set SARVAM_API_KEY to enable translation", 501);
+  const { text, from, to } = parseBody(TranslateBody, q.body);
+  return translate(text, from, to);
+}));
+
+app.get("/api/integrations", wrap((q) => ({
+  connectors: connectors(process.env.PUBLIC_URL ?? `${q.protocol}://${q.get("host")}`),
+  languages: Object.entries(SARVAM_LANGS).map(([id, v]) => ({ id, ...v })),
+  sarvam: { enabled: sarvamEnabled(), models: sarvamModels() },
+})));
+
+// MCP over Streamable HTTP (JSON responses). Optional bearer token via MCP_TOKEN; each caller gets
+// its own room through x-room, so remote clients never share state with the live demo.
+app.post("/mcp", limiter(Number(process.env.MCP_RATE_PER_MIN ?? 60), "mcp"), async (req, res) => {
+  const token = process.env.MCP_TOKEN;
+  if (token && req.header("authorization") !== `Bearer ${token}`) {
+    res.status(401).json({ jsonrpc: "2.0", id: null, error: { code: -32001, message: "Unauthorized" } });
+    return;
+  }
+  const room = getRoom(cleanRoomId(`mcp-${req.header("x-room") ?? "shared"}`));
+  const batch: unknown[] = Array.isArray(req.body) ? req.body : [req.body];
+  const out = (await Promise.all(batch.map((m) => handleMcp((m ?? {}) as never, room)))).filter(Boolean);
+  if (!out.length) {
+    res.status(202).end();
+    return;
+  }
+  res.json(Array.isArray(req.body) ? out : out[0]);
+});
 
 app.post("/api/channels/whatsapp/twilio", express.urlencoded({ extended: false }), (req, res) => {
   handleInbound(req, res).catch((e) => {

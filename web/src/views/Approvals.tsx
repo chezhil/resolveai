@@ -16,7 +16,7 @@ export function Approvals({ snap, open }: { snap: Snapshot; open: (id: string) =
       <div className="min-w-0 space-y-3">
         <div className="card p-4">
           <div className="label text-muted">Human in the loop</div>
-          <div className="font-display text-xl font-extrabold">Approvals inbox · {pending.length} pending</div>
+          <div className="font-display text-xl font-semibold">Approvals inbox · {pending.length} pending</div>
           <p className="mt-1 text-[12.5px] text-muted">
             The agent can't approve anything. L2 actions wait here; above ₹1,00,000 two different people must sign (P13).{" "}
             {pinRequired ? "Each approver signs with their own PIN, checked on the server." : "Approver identity is simulated on this server (no PINs set)."}

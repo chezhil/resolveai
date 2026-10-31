@@ -1,21 +1,36 @@
+@import "@fontsource-variable/geist";
+@import "@fontsource-variable/geist-mono";
 @import "tailwindcss";
 
+/*
+ * Design direction: "ledger blue". Cool paper console, deep-navy landing, one cyan-blue accent.
+ * Shape lock: cards 16px, controls 10px, chips fully round. Pastel tones are semantic (level and stage colours).
+ */
 @theme {
-  --color-ink: #121633;
-  --color-cream: #f4eee2;
-  --color-brand: #3039f2;
-  --color-sun: #ffd640;
-  --color-sky: #22c8f2;
-  --color-rose: #ffa6d5;
-  --color-mint: #2ed3a0;
-  --color-ember: #ff5b35;
-  --color-peach: #ffb59c;
-  --color-sand: #e8e0cc;
-  --color-muted: #5b5f7a;
+  --color-ink: #0b1b3a;
+  --color-cream: #f4f6fb;
+  --color-line: #d9e0ee;
+  --color-brand: #0b5fe0;
+  --color-sun: #fde8a0;
+  --color-sky: #aee6f8;
+  --color-rose: #f9c9de;
+  --color-mint: #b4efd3;
+  --color-ember: #f9b48a;
+  --color-peach: #fdd5bf;
+  --color-sand: #e6eaf3;
+  --color-muted: #5a6786;
 
-  --font-display: "Bricolage Grotesque", "Inter", system-ui, sans-serif;
-  --font-sans: "Inter", "Noto Sans Kannada", "Noto Sans Devanagari", system-ui, sans-serif;
-  --font-mono: "JetBrains Mono", ui-monospace, monospace;
+  --color-night: #070b14;
+  --color-night-2: #0d1424;
+  --color-night-line: #1d2742;
+  --color-fog: #e8edf7;
+  --color-fog-muted: #93a0bd;
+  --color-cyan: #2cc8f0;
+  --color-verified: #4be0a0;
+
+  --font-display: "Geist Variable", "Nirmala UI", "Noto Sans Kannada", "Noto Sans Devanagari", system-ui, sans-serif;
+  --font-sans: "Geist Variable", "Nirmala UI", "Noto Sans Kannada", "Noto Sans Devanagari", "Noto Sans Tamil", "Noto Sans Telugu", "Noto Sans Bengali", system-ui, sans-serif;
+  --font-mono: "Geist Mono Variable", ui-monospace, "Cascadia Mono", monospace;
 }
 
 :root {
@@ -25,13 +40,11 @@
 html,
 body,
 #root {
-  height: 100%;
+  min-height: 100%;
 }
 
 body {
   background-color: var(--color-cream);
-  background-image: radial-gradient(rgba(18, 22, 51, 0.09) 1px, transparent 1px);
-  background-size: 22px 22px;
   color: var(--color-ink);
   font-family: var(--font-sans);
   -webkit-font-smoothing: antialiased;
@@ -39,22 +52,24 @@ body {
 
 @utility card {
   background: white;
-  border: 2px solid var(--color-ink);
-  border-radius: 18px;
-  box-shadow: 4px 4px 0 var(--color-ink);
+  border: 1px solid var(--color-line);
+  border-radius: 16px;
+  box-shadow:
+    0 1px 2px rgba(11, 27, 58, 0.05),
+    0 10px 28px -16px rgba(11, 27, 58, 0.16);
 }
 
 @utility chunky {
-  border: 2px solid var(--color-ink);
-  box-shadow: 3px 3px 0 var(--color-ink);
+  border: 1px solid var(--color-line);
+  box-shadow: 0 1px 2px rgba(11, 27, 58, 0.06);
 }
 
 @utility label {
   font-family: var(--font-mono);
   font-size: 10.5px;
-  letter-spacing: 0.14em;
+  letter-spacing: 0.1em;
   text-transform: uppercase;
-  font-weight: 700;
+  font-weight: 600;
 }
 
 @keyframes rise {
@@ -69,15 +84,15 @@ body {
 }
 
 .rise {
-  animation: rise 0.35s ease-out both;
+  animation: rise 0.35s cubic-bezier(0.16, 1, 0.3, 1) both;
 }
 
 @keyframes ring {
   0% {
-    box-shadow: 0 0 0 0 rgba(46, 211, 160, 0.7);
+    box-shadow: 0 0 0 0 rgba(44, 200, 240, 0.6);
   }
   100% {
-    box-shadow: 0 0 0 22px rgba(46, 211, 160, 0);
+    box-shadow: 0 0 0 22px rgba(44, 200, 240, 0);
   }
 }
 
@@ -87,12 +102,200 @@ body {
 
 .scroll-thin {
   scrollbar-width: thin;
-  scrollbar-color: rgba(18, 22, 51, 0.3) transparent;
+  scrollbar-color: rgba(11, 27, 58, 0.25) transparent;
+}
+
+/* ---------------------------------------------------------------- landing (dark, locked) */
+
+.landing {
+  background: var(--color-night);
+  color: var(--color-fog);
+  min-height: 100dvh;
+  position: relative;
+  overflow-x: clip;
+}
+
+.landing ::selection {
+  background: var(--color-cyan);
+  color: var(--color-night);
+}
+
+/* Faint ledger rules behind the hero: a one-off texture on a fixed, non-interactive layer. */
+.ledger-bg {
+  position: absolute;
+  inset: 0 0 auto 0;
+  height: 900px;
+  pointer-events: none;
+  background-image:
+    linear-gradient(to bottom, rgba(44, 200, 240, 0.07), transparent 70%),
+    repeating-linear-gradient(to bottom, transparent 0 47px, rgba(147, 160, 189, 0.07) 47px 48px);
+  mask-image: linear-gradient(to bottom, #000 30%, transparent);
+}
+
+.reveal {
+  opacity: 0;
+  transform: translateY(18px);
+  transition:
+    opacity 0.7s cubic-bezier(0.16, 1, 0.3, 1),
+    transform 0.7s cubic-bezier(0.16, 1, 0.3, 1);
+  transition-delay: var(--d, 0ms);
+}
+
+.reveal.in {
+  opacity: 1;
+  transform: none;
+}
+
+/* Pipeline: a rupee chip walks through the five stages; each node lights as it passes. */
+@keyframes node-lit {
+  0%,
+  4% {
+    border-color: var(--color-night-line);
+    background: var(--color-night-2);
+  }
+  8%,
+  22% {
+    border-color: var(--color-cyan);
+    background: rgba(44, 200, 240, 0.12);
+  }
+  30%,
+  100% {
+    border-color: var(--color-night-line);
+    background: var(--color-night-2);
+  }
+}
+
+@keyframes node-verified {
+  0%,
+  72% {
+    border-color: var(--color-night-line);
+    background: var(--color-night-2);
+  }
+  80%,
+  96% {
+    border-color: var(--color-verified);
+    background: rgba(75, 224, 160, 0.14);
+  }
+  100% {
+    border-color: var(--color-night-line);
+    background: var(--color-night-2);
+  }
+}
+
+@keyframes chip-walk {
+  0%,
+  4% {
+    transform: translateY(0);
+  }
+  72%,
+  100% {
+    transform: translateY(var(--walk));
+  }
+}
+
+@keyframes settle-fade {
+  0%,
+  78% {
+    opacity: 0;
+  }
+  84%,
+  96% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 0;
+  }
+}
+
+.pipe-node {
+  animation: node-lit 10s linear infinite;
+  animation-delay: calc(var(--i) * 1.6s);
+}
+
+.pipe-node.last {
+  animation-name: node-verified;
+  animation-delay: 0s;
+}
+
+.pipe-chip {
+  animation: chip-walk 10s linear infinite;
+}
+
+.pipe-settle {
+  animation: settle-fade 10s linear infinite;
+}
+
+@keyframes marquee {
+  to {
+    transform: translateX(-50%);
+  }
+}
+
+.marquee-track {
+  animation: marquee 48s linear infinite;
+  width: max-content;
+}
+
+.btn-primary {
+  background: var(--color-cyan);
+  color: var(--color-night);
+  border-radius: 10px;
+  font-weight: 600;
+  transition:
+    transform 0.2s cubic-bezier(0.16, 1, 0.3, 1),
+    background-color 0.2s;
+}
+
+.btn-primary:hover {
+  background: #5ad7f6;
+}
+
+.btn-primary:active {
+  transform: scale(0.98);
+}
+
+.btn-ghost {
+  border: 1px solid var(--color-night-line);
+  color: var(--color-fog);
+  border-radius: 10px;
+  font-weight: 500;
+  transition:
+    border-color 0.2s,
+    transform 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.btn-ghost:hover {
+  border-color: var(--color-fog-muted);
+}
+
+.btn-ghost:active {
+  transform: scale(0.98);
+}
+
+.landing a:focus-visible,
+.landing button:focus-visible {
+  outline: 2px solid var(--color-cyan);
+  outline-offset: 3px;
 }
 
 @media (prefers-reduced-motion: reduce) {
   .rise,
-  .ring-pulse {
+  .ring-pulse,
+  .pipe-node,
+  .pipe-chip,
+  .pipe-settle,
+  .marquee-track {
     animation: none;
+  }
+  .reveal {
+    opacity: 1;
+    transform: none;
+    transition: none;
+  }
+  .pipe-settle {
+    opacity: 1;
+  }
+  .pipe-chip {
+    transform: translateY(var(--walk));
   }
 }

@@ -105,7 +105,7 @@ export function DemoGuide({ snap }: { snap: Snapshot }) {
       <SectionLabel>
         Guided demo · step {i + 1} of {STEPS.length}
       </SectionLabel>
-      <div className="font-display text-base font-extrabold leading-tight">{step.title}</div>
+      <div className="font-display text-base font-semibold leading-tight">{step.title}</div>
       <p className="mt-1 text-[12.5px] leading-snug">{pinRequired && step.pinCaption ? step.pinCaption : step.caption}</p>
       <div className="mt-2 flex flex-wrap items-center gap-2">
         <Button tone="brand" size="sm" disabled={busy} onClick={go}>
@@ -126,7 +126,7 @@ export function DemoGuide({ snap }: { snap: Snapshot }) {
       </div>
       <div className="mt-2 flex gap-1" aria-hidden>
         {STEPS.map((s, n) => (
-          <span key={s.title} className={cx("h-1.5 flex-1 rounded-full border border-ink", n < i ? "bg-mint" : n === i ? "bg-brand" : "bg-white")} />
+          <span key={s.title} className={cx("h-1.5 flex-1 rounded-full border border-line", n < i ? "bg-mint" : n === i ? "bg-brand" : "bg-white")} />
         ))}
       </div>
       {error && <p className="mt-2 text-[12px] font-semibold text-ember">{error}</p>}

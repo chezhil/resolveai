@@ -24,7 +24,7 @@ export function CasePanel({ kase, approvals, watchers }: { kase?: Case; approval
         <div className="flex items-center justify-between gap-2">
           <div>
             <div className="font-mono text-xs font-bold text-muted">{kase.id}</div>
-            <div className="font-display text-lg font-extrabold capitalize leading-tight">{kase.workflow.replace("_", " ")}</div>
+            <div className="font-display text-lg font-semibold capitalize leading-tight">{kase.workflow.replace("_", " ")}</div>
           </div>
           <StatusBadge status={kase.status} />
         </div>
@@ -44,12 +44,12 @@ export function CasePanel({ kase, approvals, watchers }: { kase?: Case; approval
               key={l}
               title={LEVEL_NAME[l]}
               className={cx(
-                "rounded-lg border-2 border-ink px-1 py-1 text-center transition-all",
+                "rounded-lg border border-line px-1 py-1 text-center transition-all",
                 RANK[l] <= RANK[kase.maxLevel] ? LEVEL_BG[l] : "bg-white opacity-35",
-                l === kase.maxLevel && "shadow-[2px_2px_0_#121633]",
+                l === kase.maxLevel && "shadow-sm",
               )}
             >
-              <div className="font-display text-base font-extrabold leading-none">{l}</div>
+              <div className="font-display text-base font-semibold leading-none">{l}</div>
               <div className="mt-0.5 text-[9px] font-semibold leading-tight">{LEVEL_NAME[l]}</div>
             </div>
           ))}
@@ -166,7 +166,7 @@ export function ApprovalCard({ a }: { a: Approval }) {
   return (
     <div className="card rise bg-rose/30 p-3">
       <SectionLabel right={<Pill tone="rose">L2{a.required > 1 ? " · two-person" : ""}</Pill>}>One-click approval · {a.id}</SectionLabel>
-      <div className="font-display text-lg font-extrabold">
+      <div className="font-display text-lg font-semibold">
         {a.tool.replaceAll("_", " ")} {a.amount ? rupees(a.amount) : ""}
       </div>
       <div className="mt-1 text-[12.5px] text-muted">{a.rationale}</div>
@@ -201,7 +201,7 @@ export function ApprovalCard({ a }: { a: Approval }) {
               value={pin}
               onChange={(e) => setPin(e.target.value)}
               aria-label={`Approver PIN for ${a.id}`}
-              className="chunky w-36 rounded-xl bg-white px-2.5 py-1.5 font-mono text-sm"
+              className="chunky w-36 rounded-[10px] bg-white px-2.5 py-1.5 font-mono text-sm"
               placeholder="••••••"
             />
           </label>

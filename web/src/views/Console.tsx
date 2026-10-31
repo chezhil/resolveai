@@ -36,9 +36,9 @@ export function Console({ snap, meta, traces, selected, select }: Props) {
                 <button
                   key={s.id}
                   onClick={() => run(s.id)}
-                  className="group flex cursor-pointer items-start gap-2 rounded-xl border-2 border-ink bg-white p-2 text-left transition-transform hover:-translate-y-0.5 hover:shadow-[3px_3px_0_#121633]"
+                  className="group flex cursor-pointer items-start gap-2 rounded-[10px] border border-line bg-white p-2 text-left transition-transform hover:-translate-y-0.5 hover:shadow-sm"
                 >
-                  <span className={cx("grid h-7 w-7 shrink-0 place-items-center rounded-lg border-2 border-ink font-display font-extrabold", TAG_TONE[s.id])}>{s.id}</span>
+                  <span className={cx("grid h-7 w-7 shrink-0 place-items-center rounded-lg border border-line font-display font-semibold", TAG_TONE[s.id])}>{s.id}</span>
                   <span className="min-w-0 flex-1">
                     <span className="block text-[13px] font-semibold leading-tight">{s.title}</span>
                     <span className="block truncate text-[11px] text-muted">{s.tag}</span>
@@ -52,7 +52,7 @@ export function Console({ snap, meta, traces, selected, select }: Props) {
         </div>
 
         <AppLink to="/merchant" className="card flex items-center gap-3 p-3 transition-transform hover:-translate-y-0.5">
-          <span className="grid h-10 w-10 shrink-0 place-items-center rounded-xl border-2 border-ink bg-mint text-lg" aria-hidden>
+          <span className="grid h-10 w-10 shrink-0 place-items-center rounded-[10px] border border-line bg-mint text-lg" aria-hidden>
             📱
           </span>
           <span className="min-w-0">
@@ -67,7 +67,7 @@ export function Console({ snap, meta, traces, selected, select }: Props) {
         <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
           <div>
             <div className="label text-muted">Agent trace · Hear → Plan → Check → Act → Verify</div>
-            <div className="font-display text-xl font-extrabold">
+            <div className="font-display text-xl font-semibold">
               {kase ? `${snap.merchants.find((m) => m.id === kase.merchantId)?.business} · ${kase.id}` : "Waiting for a signal"}
             </div>
           </div>
@@ -82,14 +82,14 @@ export function Console({ snap, meta, traces, selected, select }: Props) {
           )}
         </div>
         {kase && (
-          <div className="mb-3 rounded-xl bg-cream px-3 py-2 text-[12.5px]">
+          <div className="mb-3 rounded-[10px] bg-cream px-3 py-2 text-[12.5px]">
             <span className="label text-muted">What the model sees (PII redacted) · </span>
             <span className="font-mono">{kase.inboundRedacted}</span>
           </div>
         )}
         <Trace kase={kase} events={kase ? (traces[kase.id] ?? []) : []} />
         {kase && ["WATCHING", "AWAITING_APPROVAL"].includes(kase.status) && (
-          <div className="mt-4 flex flex-wrap items-center gap-2 rounded-xl border-2 border-dashed border-ink/40 p-3 text-sm">
+          <div className="mt-4 flex flex-wrap items-center gap-2 rounded-[10px] border border-dashed border-line p-3 text-sm">
             {kase.status === "WATCHING" ? (
               <>
                 <span>Agent is waiting on the counterparty. Jump the clock to let the money move:</span>

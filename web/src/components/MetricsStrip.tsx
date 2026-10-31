@@ -19,8 +19,8 @@ export function MetricsStrip({ snap }: { snap: Snapshot }) {
   return (
     <div className="mb-4 grid grid-cols-3 gap-1.5 sm:grid-cols-5 sm:gap-2 xl:grid-cols-10">
       {items.map(([k, v, tone]) => (
-        <div key={k} className={cx("min-w-0 rounded-xl border-2 border-ink px-2 py-1 sm:px-3 sm:py-1.5", tone)}>
-          <div className="truncate font-display text-base font-extrabold leading-tight sm:text-xl">{v}</div>
+        <div key={k} className={cx("min-w-0 rounded-[10px] border border-line px-2 py-1 sm:px-3 sm:py-1.5", tone)}>
+          <div className="truncate font-display text-base font-semibold leading-tight sm:text-xl">{v}</div>
           <div className="text-[10px] font-semibold leading-tight sm:text-[11px]">{k}</div>
         </div>
       ))}

@@ -37,7 +37,7 @@ export function Merchant({ snap, meta, live, selected, select }: Props) {
               role="tab"
               aria-selected={m.id === merchantId}
               onClick={() => setMerchantId(m.id)}
-              className={cx("label cursor-pointer rounded-full border-2 border-ink px-2.5 py-1", m.id === merchantId ? "bg-ink text-white" : "bg-white")}
+              className={cx("label cursor-pointer rounded-full border border-line px-2.5 py-1", m.id === merchantId ? "bg-ink text-white" : "bg-white")}
             >
               {m.owner.split(" ")[0]}
             </button>
@@ -50,7 +50,7 @@ export function Merchant({ snap, meta, live, selected, select }: Props) {
         {merchant && (
           <div className="card p-3">
             <SectionLabel right={<Pill tone="sky">{merchant.lang === "kn" ? "Kannada" : merchant.lang === "hi" ? "Hindi" : "English"}</Pill>}>{merchant.id}</SectionLabel>
-            <div className="font-display text-lg font-extrabold leading-tight">{merchant.business}</div>
+            <div className="font-display text-lg font-semibold leading-tight">{merchant.business}</div>
             <div className="text-[12.5px] text-muted">
               {merchant.owner} · {merchant.area}
             </div>
@@ -60,7 +60,7 @@ export function Merchant({ snap, meta, live, selected, select }: Props) {
                   <button
                     key={s.id}
                     onClick={() => api(`/scenarios/${s.id}`, {})}
-                    className="chunky cursor-pointer rounded-xl bg-sun px-2.5 py-1 text-left text-[12px] font-semibold"
+                    className="chunky cursor-pointer rounded-[10px] bg-sun px-2.5 py-1 text-left text-[12px] font-semibold"
                   >
                     {s.id} · {s.title}
                   </button>

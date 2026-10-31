@@ -1,5 +1,8 @@
 import { useEffect, useRef, useState } from "react";
-import { Navigate, Route, Routes } from "react-router";
+import { Link, Navigate, Route, Routes } from "react-router";
+import { useI18n } from "./lib/i18n";
+import { LangSwitch } from "./components/LangSwitch";
+import { Plugins } from "./views/Plugins";
 import type { Meta, Snapshot } from "./lib/api";
 import { api } from "./lib/api";
 import { useLive } from "./lib/store";
@@ -17,18 +20,18 @@ import { Button, Pill, cx } from "./components/ui";
 
 interface Page {
   path: string;
-  label: string;
-  short: string;
+  key: string;
 }
 
 const PAGES: Page[] = [
-  { path: "/", label: "Live console", short: "Console" },
-  { path: "/merchant", label: "Merchant phone", short: "Phone" },
-  { path: "/approvals", label: "Approvals", short: "Approvals" },
-  { path: "/cases", label: "Cases & archive", short: "Cases" },
-  { path: "/evals", label: "Evals & benchmarks", short: "Evals" },
-  { path: "/audit", label: "Audit log", short: "Audit" },
-  { path: "/impact", label: "Impact", short: "Impact" },
+  { path: "/", key: "app.console" },
+  { path: "/merchant", key: "app.phone" },
+  { path: "/approvals", key: "app.approvals" },
+  { path: "/cases", key: "app.cases" },
+  { path: "/evals", key: "app.evals" },
+  { path: "/audit", key: "app.audit" },
+  { path: "/impact", key: "app.impact" },
+  { path: "/plugins", key: "app.plugins" },
 ];
 
 export default function App() {
@@ -98,7 +101,8 @@ export default function App() {
                 </>
               }
             />
-            <Route path="*" element={<Navigate to="/" replace />} />
+            <Route path="/plugins" element={<Plugins />} />
+            <Route path="*" element={<Navigate to="/app" replace />} />
           </Routes>
         </main>
       </div>
@@ -107,27 +111,29 @@ export default function App() {
 }
 
 function Header({ snap, connected, onReset }: { snap: Snapshot; connected: boolean; onReset: () => void }) {
+  const { t } = useI18n();
   const [controlsOpen, setControlsOpen] = useState(false);
   const pending = snap.approvals.filter((a) => a.status === "PENDING").length;
   const brainLabel = snap.brain === "llm" ? `LLM · ${snap.providers.join(" → ") || "no key"}` : "Offline planner";
 
   return (
-    <header className="z-30 -mx-4 mb-4 border-b-2 border-ink bg-cream/95 px-4 py-2.5 backdrop-blur sticky top-0">
+    <header className="z-30 -mx-4 mb-4 border-b border-line bg-cream/95 px-4 py-2.5 backdrop-blur sticky top-0">
       <div className="flex items-center gap-x-4 gap-y-2">
         <Logo />
         <span className="hidden whitespace-nowrap font-mono text-sm font-bold sm:inline lg:hidden">{snap.nowLabel}</span>
-        <span title={connected ? "Live" : "Disconnected"} className={cx("h-2.5 w-2.5 shrink-0 rounded-full border border-ink lg:hidden", connected ? "bg-mint" : "bg-ember")} />
+        <span title={connected ? "Live" : "Disconnected"} className={cx("h-2.5 w-2.5 shrink-0 rounded-full border border-line lg:hidden", connected ? "bg-mint" : "bg-ember")} />
         <button
           onClick={() => setControlsOpen(!controlsOpen)}
           aria-expanded={controlsOpen}
           aria-controls="sim-controls"
-          className="chunky ml-auto cursor-pointer rounded-xl bg-white px-2.5 py-1 text-[13px] font-semibold lg:hidden"
+          className="chunky ml-auto cursor-pointer rounded-[10px] bg-white px-2.5 py-1 text-[13px] font-semibold lg:hidden"
         >
           {controlsOpen ? "Close" : "Controls"}
         </button>
         <div id="sim-controls" className={cx("ml-auto hidden flex-wrap items-center gap-2 lg:flex")}>
           <SimControls snap={snap} brainLabel={brainLabel} onReset={onReset} />
-          <span title={connected ? "Live" : "Disconnected"} className={cx("h-2.5 w-2.5 rounded-full border border-ink", connected ? "bg-mint" : "bg-ember")} />
+          <LangSwitch />
+          <span title={connected ? "Live" : "Disconnected"} className={cx("h-2.5 w-2.5 rounded-full", connected ? "bg-verified" : "bg-ember")} />
         </div>
       </div>
       {controlsOpen && (
@@ -142,11 +148,10 @@ function Header({ snap, connected, onReset }: { snap: Snapshot; connected: boole
             to={p.path}
             end={p.path === "/"}
             className={(active) =>
-              cx("flex shrink-0 items-center whitespace-nowrap rounded-lg border-2 px-2.5 py-1 text-[13px] font-semibold", active ? "border-ink bg-ink text-white" : "border-transparent hover:border-ink/30")
+              cx("flex shrink-0 items-center whitespace-nowrap rounded-lg border px-2.5 py-1 text-[13px] font-semibold", active ? "border-line bg-ink text-white" : "border-transparent hover:border-line")
             }
           >
-            <span className="sm:hidden">{p.short}</span>
-            <span className="hidden sm:inline">{p.label}</span>
+            {t(p.key)}
             {p.path === "/approvals" && pending > 0 && (
               <span className="ml-1 rounded-full bg-rose px-1.5 text-[11px] text-ink" aria-label={`${pending} pending`}>
                 {pending}
@@ -160,15 +165,17 @@ function Header({ snap, connected, onReset }: { snap: Snapshot; connected: boole
 }
 
 function SimControls({ snap, brainLabel, onReset }: { snap: Snapshot; brainLabel: string; onReset: () => void }) {
+  // Jumping the clock while the agent is mid-case races its watchers and can leave a stale hand-off note.
+  const working = snap.cases.some((c) => c.status === "IN_PROGRESS");
   return (
     <>
-      <div className="chunky flex items-center gap-2 rounded-xl bg-white px-2.5 py-1">
+      <div className="chunky flex items-center gap-2 rounded-[10px] bg-white px-2.5 py-1">
         <span className="label text-muted">Sim clock</span>
         <span className="whitespace-nowrap font-mono text-sm font-bold sm:hidden lg:inline">{snap.nowLabel}</span>
-        <Button size="sm" tone="sun" onClick={() => api("/clock/advance", { minutes: 10 })}>
+        <Button size="sm" tone="sun" disabled={working} title={working ? "Wait for the agent to finish this step" : undefined} onClick={() => api("/clock/advance", { minutes: 10 })}>
           +10m
         </Button>
-        <Button size="sm" tone="sun" onClick={() => api("/clock/advance", { minutes: 24 * 60 })}>
+        <Button size="sm" tone="sun" disabled={working} title={working ? "Wait for the agent to finish this step" : undefined} onClick={() => api("/clock/advance", { minutes: 24 * 60 })}>
           +1 day
         </Button>
       </div>
@@ -176,7 +183,7 @@ function SimControls({ snap, brainLabel, onReset }: { snap: Snapshot; brainLabel
         value={snap.config.brain}
         onChange={(e) => api("/config", { brain: e.target.value })}
         aria-label="Brain"
-        className="chunky max-w-full cursor-pointer rounded-xl bg-white px-2 py-1.5 text-[13px] font-semibold"
+        className="chunky max-w-full cursor-pointer rounded-[10px] bg-white px-2 py-1.5 text-[13px] font-semibold"
         title="Which brain proposes actions. Policy, tools and verifier are the same either way."
       >
         <option value="auto">Brain: auto ({brainLabel})</option>
@@ -196,13 +203,13 @@ function SimControls({ snap, brainLabel, onReset }: { snap: Snapshot; brainLabel
 
 function Logo() {
   return (
-    <div className="flex shrink-0 items-center gap-2">
-      <span className="grid h-8 w-8 place-items-center rounded-lg border-2 border-ink bg-sun font-bold shadow-[2px_2px_0_#121633]">✓</span>
-      <span className="font-display text-xl font-extrabold tracking-tight">ResolveAI</span>
+    <Link to="/" className="flex shrink-0 items-center gap-2" aria-label="ResolveAI home">
+      <span className="grid h-8 w-8 place-items-center rounded-[10px] bg-ink text-sm font-bold text-cyan">R</span>
+      <span className="font-display text-xl font-semibold tracking-tight">ResolveAI</span>
       <span className="hidden xl:block">
         <Pill tone="brand">Track 3 · Autonomous AI teammate</Pill>
       </span>
-    </div>
+    </Link>
   );
 }
 
@@ -211,9 +218,9 @@ function Toggle({ on, label, onClick, danger }: { on: boolean; label: string; on
     <button
       onClick={onClick}
       aria-pressed={on}
-      className={cx("chunky flex cursor-pointer items-center gap-1.5 rounded-xl px-2 py-1.5 text-[13px] font-semibold", on ? (danger ? "bg-ember" : "bg-sky") : "bg-white")}
+      className={cx("chunky flex cursor-pointer items-center gap-1.5 rounded-[10px] px-2 py-1.5 text-[13px] font-semibold", on ? (danger ? "bg-ember" : "bg-sky") : "bg-white")}
     >
-      <span className={cx("relative h-4 w-7 rounded-full border-2 border-ink", on ? "bg-ink" : "bg-sand")}>
+      <span className={cx("relative h-4 w-7 rounded-full border border-line", on ? "bg-ink" : "bg-sand")}>
         <span className={cx("absolute top-[1px] h-2.5 w-2.5 rounded-full bg-white transition-all", on ? "left-3" : "left-[1px]")} />
       </span>
       {label}

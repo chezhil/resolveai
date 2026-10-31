@@ -69,8 +69,8 @@ export function Phone({ merchant, messages, cases, sarvam, onSent }: PhoneProps)
 
   return (
     <div className="card overflow-hidden">
-      <div className="flex items-center gap-2 border-b-2 border-ink bg-[#0b5e54] px-3 py-2 text-white">
-        <div className="grid h-8 w-8 place-items-center rounded-full bg-sun font-display text-sm font-extrabold text-ink">{merchant.owner[0]}</div>
+      <div className="flex items-center gap-2 border-b border-line bg-[#0b5e54] px-3 py-2 text-white">
+        <div className="grid h-8 w-8 place-items-center rounded-full bg-sun font-display text-sm font-semibold text-ink">{merchant.owner[0]}</div>
         <div className="min-w-0 flex-1">
           <div className="truncate text-sm font-semibold">{merchant.business}</div>
           <div className="truncate text-[11px] opacity-80">WhatsApp · Paytm for Business</div>
@@ -83,11 +83,11 @@ export function Phone({ merchant, messages, cases, sarvam, onSent }: PhoneProps)
         {thread.length === 0 && <div className="mt-24 text-center text-xs text-muted">No messages yet</div>}
         {thread.map((m) => (
           <div key={m.id} className={cx("rise flex", m.from === "merchant" ? "justify-end" : "justify-start")}>
-            <div className={cx("max-w-[86%] rounded-xl border border-ink/15 px-2.5 py-1.5 text-[13px] leading-snug shadow-sm", m.from === "merchant" ? "bg-[#d9fdd3]" : "bg-white")}>
+            <div className={cx("max-w-[86%] rounded-[10px] border border-line px-2.5 py-1.5 text-[13px] leading-snug shadow-sm", m.from === "merchant" ? "bg-[#d9fdd3]" : "bg-white")}>
               {m.from !== "merchant" && <div className="mb-0.5 text-[10.5px] font-bold text-brand">ResolveAI</div>}
               {m.channel === "whatsapp" && m.from === "merchant" && /maadidru|helilla/.test(m.text) && <div className="mb-1 text-[10.5px] text-muted">🎙 Voice note · transcribed</div>}
               <div className="whitespace-pre-wrap">{m.text}</div>
-              {gloss && m.gloss && m.lang !== "en" && <div className="mt-1 border-t border-ink/10 pt-1 text-[11.5px] italic text-muted">{m.gloss}</div>}
+              {gloss && m.gloss && m.lang !== "en" && <div className="mt-1 border-t border-line pt-1 text-[11.5px] italic text-muted">{m.gloss}</div>}
               <div className="mt-0.5 flex items-center justify-end gap-2 text-[10px] text-muted">
                 {m.from === "agent" && (
                   <button className="cursor-pointer text-brand" onClick={() => play(m)} title={sarvam ? "Play with Sarvam TTS" : "Play with browser voice"}>
@@ -97,7 +97,7 @@ export function Phone({ merchant, messages, cases, sarvam, onSent }: PhoneProps)
                 {fmtClock(m.simTs)}
               </div>
               {lastAgent.get(m.caseId) === m.id && caseOf(m.caseId)?.status === "RESOLVED" && !caseOf(m.caseId)?.csat && (
-                <div className="mt-1 flex items-center gap-1 border-t border-ink/10 pt-1">
+                <div className="mt-1 flex items-center gap-1 border-t border-line pt-1">
                   <span className="text-[10.5px] text-muted">Rate:</span>
                   {[1, 2, 3, 4, 5].map((n) => (
                     <button key={n} onClick={() => rate(m.caseId, n)} className="cursor-pointer text-base leading-none text-sun hover:scale-125" aria-label={`${n} stars`}>
@@ -113,7 +113,7 @@ export function Phone({ merchant, messages, cases, sarvam, onSent }: PhoneProps)
           </div>
         ))}
       </div>
-      <div className="flex items-center gap-1.5 border-t-2 border-ink bg-white p-2">
+      <div className="flex items-center gap-1.5 border-t-2 border-line bg-white p-2">
         <button title={listening ? "Stop and transcribe" : sarvam ? "Record a voice note (Sarvam ASR)" : "Speak (browser speech recognition)"} onClick={listen} className={cx("chunky grid h-9 w-9 shrink-0 cursor-pointer place-items-center rounded-full text-sm", listening ? "bg-ember" : "bg-sun")}>
           {listening ? "■" : "🎙"}
         </button>
@@ -122,13 +122,13 @@ export function Phone({ merchant, messages, cases, sarvam, onSent }: PhoneProps)
           onChange={(e) => setText(e.target.value)}
           onKeyDown={(e) => e.key === "Enter" && send()}
           placeholder={`Message as ${merchant.owner.split(" ")[0]}…`}
-          className="min-w-0 flex-1 rounded-lg border-2 border-ink/20 px-2.5 py-1.5 text-sm outline-none focus:border-brand"
+          className="min-w-0 flex-1 rounded-lg border border-line px-2.5 py-1.5 text-sm outline-none focus:border-brand"
         />
         <Button tone="brand" size="sm" onClick={send}>
           Send
         </Button>
       </div>
-      {err && <div className="border-t border-ink/10 bg-ember/10 px-3 py-1.5 text-xs">{err}</div>}
+      {err && <div className="border-t border-line bg-ember/10 px-3 py-1.5 text-xs">{err}</div>}
     </div>
   );
 }
@@ -162,8 +162,8 @@ export function Soundbox({ merchant, announcements, live, sarvam }: { merchant?:
   if (!merchant) return null;
   return (
     <div className="card flex items-center gap-3 p-3">
-      <div className={cx("relative grid h-16 w-16 shrink-0 place-items-center rounded-2xl border-2 border-ink bg-ink", fresh && "ring-pulse")}>
-        <div className="grid h-11 w-11 place-items-center rounded-full border-2 border-white/30 bg-[radial-gradient(circle,#3a3f66_1px,transparent_1.5px)] [background-size:5px_5px]">
+      <div className={cx("relative grid h-16 w-16 shrink-0 place-items-center rounded-2xl border border-line bg-ink", fresh && "ring-pulse")}>
+        <div className="grid h-11 w-11 place-items-center rounded-full border border-white/30 bg-[radial-gradient(circle,#3a3f66_1px,transparent_1.5px)] [background-size:5px_5px]">
           <span className={cx("h-2.5 w-2.5 rounded-full", last ? "bg-mint" : "bg-white/30")} />
         </div>
         <span className="absolute -bottom-2 rounded bg-sun px-1 font-mono text-[9px] font-bold">{merchant.soundboxId}</span>

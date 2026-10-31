@@ -47,7 +47,7 @@ export function Audit({ version }: { version: number }) {
       <div className="card flex flex-wrap items-center justify-between gap-3 p-4">
         <div className="max-w-2xl">
           <div className="label text-muted">Immutable audit log · externally anchored</div>
-          <div className="font-display text-xl font-extrabold">Every read, proposal, policy decision, approval and action, hash-chained</div>
+          <div className="font-display text-xl font-semibold">Every read, proposal, policy decision, approval and action, hash-chained</div>
           <p className="mt-1 text-[13px] text-muted">
             Each entry commits to the SHA-256 of the one before it, and the chain head is published as a signed anchor every 10 entries and at every case close. A naive edit breaks the chain; a full rewrite that
             re-hashes everything still contradicts the published anchors.
@@ -96,7 +96,7 @@ export function Audit({ version }: { version: number }) {
         <Empty>No entries yet.</Empty>
       ) : (
         <div className="card overflow-hidden">
-          <div className="border-b-2 border-ink px-4 py-2">
+          <div className="border-b border-line px-4 py-2">
             <SectionLabel>{entries.length} entries</SectionLabel>
           </div>
           <div className="scroll-thin max-h-[70vh] overflow-auto">
@@ -104,7 +104,7 @@ export function Audit({ version }: { version: number }) {
             {[...entries].reverse().map((e) => {
               const broken = verify && !verify.ok && verify.brokenAt !== undefined && e.seq >= verify.brokenAt;
               return (
-                <div key={e.seq} className={cx("border-t border-ink/10", broken && "bg-ember/15")}>
+                <div key={e.seq} className={cx("border-t border-line", broken && "bg-ember/15")}>
                   <button onClick={() => setOpen(open === e.seq ? null : e.seq)} className="grid w-full cursor-pointer grid-cols-[56px_120px_120px_minmax(0,1fr)_120px] items-center gap-2 px-4 py-1.5 text-left text-[12.5px] hover:bg-cream">
                     <span className="font-mono font-bold">#{e.seq}</span>
                     <span className="whitespace-nowrap text-muted">{fmtTime(e.ts)}</span>

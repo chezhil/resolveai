@@ -8,7 +8,7 @@ const PINS = { "ops-lead": "481516", "risk-lead": "234200" };
 
 /** Scenario B leaves a ₹1.84 L settlement release waiting for two approvers (P13). */
 async function pendingTwoPersonApproval() {
-  const rt = new Runtime({ pacingMs: 0 });
+  const rt = new Runtime({ pacingMs: 0, brain: "planner" });
   SCENARIOS.find((s) => s.id === "B")!.run(rt);
   await rt.idle();
   const appr = [...rt.approvals.values()][0]!;

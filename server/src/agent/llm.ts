@@ -7,7 +7,7 @@ import { ModelOutage } from "./brain.js";
 import { llmTools } from "../tools/registry.js";
 
 interface Provider {
-  name: "groq" | "gemini";
+  name: "groq" | "gemini" | "sarvam";
   baseUrl: string;
   key: string;
   envModel?: string;
@@ -35,6 +35,17 @@ export function configuredProviders(): Provider[] {
       baseUrl: process.env.GEMINI_BASE_URL ?? "https://generativelanguage.googleapis.com/v1beta/openai",
       key: process.env.GEMINI_API_KEY,
       envModel: process.env.GEMINI_MODEL,
+      prefer: [],
+    });
+  }
+  // Sarvam-105B as an Indic-first third fallback. Opt in with SARVAM_CHAT=1: the same key also powers
+  // voice, and tool-calling on this endpoint has not been verified from this repo.
+  if (process.env.SARVAM_API_KEY && process.env.SARVAM_CHAT === "1") {
+    out.push({
+      name: "sarvam",
+      baseUrl: process.env.SARVAM_CHAT_BASE_URL ?? "https://api.sarvam.ai/v1",
+      key: process.env.SARVAM_API_KEY,
+      envModel: process.env.SARVAM_CHAT_MODEL ?? "sarvam-105b",
       prefer: [],
     });
   }
@@ -130,7 +141,7 @@ export class LlmBrain implements Brain {
       try {
         const res = await fetch(`${p.baseUrl}/chat/completions`, {
           method: "POST",
-          headers: { "Content-Type": "application/json", Authorization: `Bearer ${p.key}` },
+          headers: { "Content-Type": "application/json", Authorization: `Bearer ${p.key}`, ...(p.name === "sarvam" && { "api-subscription-key": p.key }) },
           body: JSON.stringify({ model, messages: this.messages, tools: llmTools(), tool_choice: "auto", temperature: 0.2, max_tokens: 4096 }),
           signal: AbortSignal.timeout(60_000),
         });

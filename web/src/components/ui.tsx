@@ -20,7 +20,7 @@ export function Button({ tone = "white", size = "md", className, ...p }: ButtonH
     <button
       {...p}
       className={cx(
-        "chunky rounded-xl font-semibold transition-transform active:translate-x-[2px] active:translate-y-[2px] active:shadow-none disabled:opacity-40 disabled:pointer-events-none cursor-pointer",
+        "chunky rounded-[10px] font-semibold transition-transform active:scale-[0.97] disabled:opacity-40 disabled:pointer-events-none cursor-pointer",
         size === "sm" ? "px-2.5 py-1 text-xs" : "px-3.5 py-2 text-sm",
         TONE[tone],
         className,
@@ -30,7 +30,7 @@ export function Button({ tone = "white", size = "md", className, ...p }: ButtonH
 }
 
 export function Pill({ tone = "white", children, className }: { tone?: Tone; children: ReactNode; className?: string }) {
-  return <span className={cx("label inline-flex items-center gap-1 rounded-full border-2 border-ink px-2 py-0.5 whitespace-nowrap", TONE[tone], className)}>{children}</span>;
+  return <span className={cx("label inline-flex items-center gap-1 rounded-full border border-line px-2 py-0.5 whitespace-nowrap", TONE[tone], className)}>{children}</span>;
 }
 
 export const LEVEL_TONE: Record<Level, Tone> = { L0: "sun", L1: "sky", L2: "rose", L3: "ember" };
@@ -80,7 +80,7 @@ export function SectionLabel({ children, right }: { children: ReactNode; right?:
 }
 
 export function Empty({ children }: { children: ReactNode }) {
-  return <div className="rounded-xl border-2 border-dashed border-ink/25 p-5 text-center text-sm text-muted">{children}</div>;
+  return <div className="rounded-[10px] border border-dashed border-line p-5 text-center text-sm text-muted">{children}</div>;
 }
 
 export function Json({ value }: { value: unknown }) {

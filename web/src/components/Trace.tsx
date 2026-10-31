@@ -41,7 +41,7 @@ function Row({ e }: { e: TraceEvent }) {
         <StageChip stage={e.stage} />
         <span className="rounded bg-ink px-1.5 py-0.5 font-mono text-[10px] font-bold text-white">{fmtTPlus(e.tPlus)}</span>
       </div>
-      <div className={cx("min-w-0 flex-1 rounded-xl border-2 border-ink bg-white px-3 py-2", e.stage === "HANDOFF" && "bg-brand/5", e.stage === "VERIFY" && "bg-mint/10")}>
+      <div className={cx("min-w-0 flex-1 rounded-[10px] border border-line bg-white px-3 py-2", e.stage === "HANDOFF" && "bg-brand/5", e.stage === "VERIFY" && "bg-mint/10")}>
         <div className="flex items-start justify-between gap-2">
           <div className="min-w-0 text-[13.5px] font-semibold leading-snug">{e.title}</div>
           <div className="flex shrink-0 items-center gap-1">

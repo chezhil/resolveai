@@ -64,7 +64,7 @@ export function Evals({ llmAvailable }: { llmAvailable: boolean }) {
       <div className="card flex flex-wrap items-center justify-between gap-3 p-4">
         <div>
           <div className="label text-muted">Learns safely · test before it acts</div>
-          <div className="font-display text-xl font-extrabold">Golden-case evals + shadow replay on past tickets</div>
+          <div className="font-display text-xl font-semibold">Golden-case evals + shadow replay on past tickets</div>
           <p className="mt-1 max-w-2xl text-[13px] text-muted">
             Each case runs in a fresh, isolated world. Assertions read the ledger, settlement and dispute systems, not the agent's own words. The same suite runs in CI on every push.
           </p>
@@ -90,13 +90,13 @@ export function Evals({ llmAvailable }: { llmAvailable: boolean }) {
             <Stat tone="bg-mint" big={`${(res.shadow.medianHumanMinutes / 60).toFixed(0)}h → secs`} label="median human time vs agent" />
           </div>
           <div className="card overflow-hidden">
-            <div className="border-b-2 border-ink px-4 py-2">
+            <div className="border-b border-line px-4 py-2">
               <SectionLabel right={<Pill>{res.brain === "llm" ? "Groq → Gemini" : "offline planner"}</Pill>}>Golden cases</SectionLabel>
             </div>
             {res.golden.map((g) => (
-              <div key={g.id} className="border-t border-ink/10 first:border-0">
+              <div key={g.id} className="border-t border-line first:border-0">
                 <button onClick={() => setOpen(open === g.id ? null : g.id)} className="flex w-full cursor-pointer items-center gap-3 px-4 py-2 text-left hover:bg-cream">
-                  <span className={cx("grid h-6 w-6 place-items-center rounded-full border-2 border-ink text-xs font-bold", g.pass ? "bg-mint" : "bg-ember")}>{g.pass ? "✓" : "✗"}</span>
+                  <span className={cx("grid h-6 w-6 place-items-center rounded-full border border-line text-xs font-bold", g.pass ? "bg-mint" : "bg-ember")}>{g.pass ? "✓" : "✗"}</span>
                   <span className="font-mono text-xs font-bold">{g.id}</span>
                   <span className="min-w-0 flex-1 truncate text-[13px] font-medium">{g.title}</span>
                   <Pill>{g.category}</Pill>
@@ -117,7 +117,7 @@ export function Evals({ llmAvailable }: { llmAvailable: boolean }) {
             ))}
           </div>
           <div className="card overflow-x-auto">
-            <div className="border-b-2 border-ink px-4 py-2">
+            <div className="border-b border-line px-4 py-2">
               <SectionLabel>
                 Shadow mode · historical tickets (synthetic stand-ins) · agreement with human {Math.round(res.shadow.agreement * 100)}%
               </SectionLabel>
@@ -134,7 +134,7 @@ export function Evals({ llmAvailable }: { llmAvailable: boolean }) {
               </thead>
               <tbody>
                 {res.shadow.rows.map((r) => (
-                  <tr key={r.id} className="border-t border-ink/10">
+                  <tr key={r.id} className="border-t border-line">
                     <td className="px-3 py-2 font-mono font-bold whitespace-nowrap">
                       {r.correct ? "✅" : "❌"} {r.id}
                     </td>
@@ -158,7 +158,7 @@ export function Evals({ llmAvailable }: { llmAvailable: boolean }) {
 function Stat({ big, label, tone }: { big: string; label: string; tone: string }) {
   return (
     <div className={cx("card p-4", tone)}>
-      <div className="font-display text-4xl font-extrabold tracking-tight">{big}</div>
+      <div className="font-display text-4xl font-semibold tracking-tight">{big}</div>
       <div className="mt-1 text-[13px] font-semibold">{label}</div>
     </div>
   );

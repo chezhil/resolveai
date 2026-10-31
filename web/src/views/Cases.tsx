@@ -22,9 +22,9 @@ function Archive() {
   if (!data) return null;
   return (
     <div className="card mt-4 overflow-hidden">
-      <div className="border-b-2 border-ink p-4">
+      <div className="border-b border-line p-4">
         <div className="label text-muted">Durable case memory · SQLite</div>
-        <div className="font-display text-lg font-extrabold">Archive across sessions and restarts</div>
+        <div className="font-display text-lg font-semibold">Archive across sessions and restarts</div>
         {!data.enabled && <p className="text-[12.5px] text-muted">Persistence is off on this server (needs Node 22.13+ with node:sqlite).</p>}
       </div>
       {data.enabled && (
@@ -41,7 +41,7 @@ function Archive() {
             </thead>
             <tbody>
               {data.cases.map((c) => (
-                <tr key={c.room + c.id} className="border-t border-ink/10">
+                <tr key={c.room + c.id} className="border-t border-line">
                   <td className="px-3 py-1.5 font-mono text-[11px] text-muted">{c.room}</td>
                   <td className="px-3 py-1.5 font-mono font-bold">{c.id}</td>
                   <td className="px-3 py-1.5">{c.merchant}</td>
@@ -64,9 +64,9 @@ export function Cases({ snap, open }: { snap: Snapshot; open: (id: string) => vo
   return (
     <div className="min-w-0">
       <div className="card overflow-hidden">
-        <div className="border-b-2 border-ink p-4">
+        <div className="border-b border-line p-4">
           <div className="label text-muted">Case memory</div>
-          <div className="font-display text-xl font-extrabold">All cases · one owner each, complaint to confirmed closure</div>
+          <div className="font-display text-xl font-semibold">All cases · one owner each, complaint to confirmed closure</div>
         </div>
         {snap.cases.length === 0 ? (
           <div className="p-4">
@@ -91,7 +91,7 @@ export function Cases({ snap, open }: { snap: Snapshot; open: (id: string) => vo
                     tabIndex={0}
                     onClick={() => open(c.id)}
                     onKeyDown={(e) => e.key === "Enter" && open(c.id)}
-                    className="cursor-pointer border-t border-ink/10 hover:bg-sun/15 focus:bg-sun/15 focus:outline-none"
+                    className="cursor-pointer border-t border-line hover:bg-sun/15 focus:bg-sun/15 focus:outline-none"
                   >
                     <td className="px-3 py-2 font-mono font-bold">
                       {c.id}
