@@ -15,6 +15,7 @@ type Db = {
 class Archive {
   private db: Db | null = null;
   ready: Promise<void>;
+  private written = new Map<string, string>();
   disabled = process.env.ARCHIVE === "off" || process.env.VITEST === "true";
 
   constructor() {
@@ -51,7 +52,12 @@ class Archive {
          csat=excluded.csat, body=excluded.body, updated_at=excluded.updated_at`,
     );
     for (const c of cases) {
-      stmt.run(room, c.id, c.merchantId, c.workflow, c.status, c.maxLevel, c.openedAt, c.closedAt ?? null, c.csat ?? null, JSON.stringify(c), Date.now());
+      // Skip cases unchanged since their last write; the update tick calls this for every case.
+      const body = JSON.stringify(c);
+      const key = `${room}/${c.id}`;
+      if (this.written.get(key) === body) continue;
+      this.written.set(key, body);
+      stmt.run(room, c.id, c.merchantId, c.workflow, c.status, c.maxLevel, c.openedAt, c.closedAt ?? null, c.csat ?? null, body, Date.now());
     }
   }
 

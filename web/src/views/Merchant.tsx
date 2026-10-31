@@ -104,11 +104,7 @@ export function Merchant({ snap, meta, live, selected, select }: Props) {
                 with <b className="font-mono">{meta.whatsapp.joinCode}</b> first
               </>
             )}
-            , then open{" "}
-            <a className="font-semibold text-brand underline" href={`/merchant?room=${meta.whatsapp.room}`}>
-              the WhatsApp room
-            </a>{" "}
-            to watch your case. You play {snap.merchants.find((m) => m.id === "M1001")?.owner}.
+            . You play {snap.merchants.find((m) => m.id === "M1001")?.owner}.
           </div>
         )}
       </div>

@@ -5,6 +5,7 @@ import type { Response } from "express";
 import { Runtime } from "./core/runtime.js";
 import { archive } from "./core/archive.js";
 import type { ChatMessage } from "./core/types.js";
+import { ClientError } from "./core/errors.js";
 
 type OutboundHook = (room: Room, m: ChatMessage) => void;
 const outboundHooks: OutboundHook[] = [];
@@ -19,6 +20,7 @@ export interface Room {
 
 const MAX_ROOMS = Number(process.env.MAX_ROOMS ?? 200);
 const IDLE_MS = 2 * 60 * 60 * 1000;
+const FORCE_IDLE_MS = 10 * 60 * 1000;
 const rooms = new Map<string, Room>();
 
 export const cleanRoomId = (raw: unknown) => {
@@ -62,7 +64,8 @@ function makeRuntime(room: Room, keep?: Runtime["config"]) {
 export function getRoom(id: string): Room {
   let room = rooms.get(id);
   if (!room) {
-    if (rooms.size >= MAX_ROOMS) evict(true);
+    // Full: only reclaim a room that has been idle a while, never a fresh one, so room-id spam can't flush other sessions.
+    if (rooms.size >= MAX_ROOMS && !evict(true)) throw new ClientError("Server is at capacity; try again shortly", 503);
     room = { id, rt: undefined as unknown as Runtime, clients: new Set(), lastSeen: Date.now() };
     room.rt = makeRuntime(room);
     rooms.set(id, room);
@@ -83,12 +86,13 @@ function evict(force = false) {
   const now = Date.now();
   const idle = [...rooms.values()].filter((r) => r.clients.size === 0).sort((a, b) => a.lastSeen - b.lastSeen);
   for (const r of idle) {
-    if (force || now - r.lastSeen > IDLE_MS) {
+    if (now - r.lastSeen > (force ? FORCE_IDLE_MS : IDLE_MS)) {
       r.rt.removeAllListeners();
       rooms.delete(r.id);
-      if (force) return;
+      if (force) return true;
     }
   }
+  return false;
 }
 
 setInterval(() => evict(false), 10 * 60 * 1000).unref();
