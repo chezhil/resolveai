@@ -1,0 +1,4 @@
+# Keep pitch decks and demo recordings in the repo root out of `railway up` uploads
+/*.mov
+/*.mp4
+/*.pdf
