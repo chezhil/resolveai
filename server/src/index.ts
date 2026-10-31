@@ -254,7 +254,7 @@ app.get("/api/archive", wrap(async () => {
 
 app.post("/api/evals/run", wrap(async (q) => {
   const brain = q.body?.brain === "llm" ? "llm" : "planner";
-  if (brain === "llm" && !configuredProviders().length) throw new ClientError("Set GROQ_API_KEY or GEMINI_API_KEY to run the LLM evals");
+  if (brain === "llm" && !configuredProviders().length) throw new ClientError("Set GROQ_API_KEY, GEMINI_API_KEY or SARVAM_API_KEY + SARVAM_CHAT=1 to run the LLM evals");
   if (evalRun) throw new ClientError("An eval run is already in progress; try again in a moment", 409);
   evalRun = Promise.all([runGolden({ brain }), runShadowReplay()]);
   try {

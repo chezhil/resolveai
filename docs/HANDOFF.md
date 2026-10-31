@@ -278,7 +278,7 @@ Colour meaning is consistent: **L0 sun, L1 sky, L2 rose, L3 ember**; stages HEAR
 | `GROQ_API_KEY`, `GROQ_MODEL` | Primary LLM. Model auto-picked from Groq's `/models` if unset (prefers `openai/gpt-oss-120b`) |
 | `GEMINI_API_KEY`, `GEMINI_MODEL` | Fallback LLM (newest stable Flash auto-picked) |
 | `BRAIN` | `auto` (default) / `llm` / `planner` |
-| `SARVAM_API_KEY` (+ `SARVAM_ASR_MODEL`, `SARVAM_TTS_MODEL`, `SARVAM_TTS_SPEAKER`) | Indic ASR/TTS (`saarika:v2.5`, `bulbul:v2` defaults; not verified against the live API) |
+| `SARVAM_API_KEY` (+ `SARVAM_ASR_MODEL`, `SARVAM_TTS_MODEL`, `SARVAM_TTS_SPEAKER`) | Indic ASR/TTS (`saaras:v3`, `bulbul:v3` + speaker `priya` defaults; verified against the live API on 2026-10-31) |
 | `TWILIO_ACCOUNT_SID`, `TWILIO_AUTH_TOKEN`, `TWILIO_WHATSAPP_FROM`, `TWILIO_SANDBOX_JOIN`, `PUBLIC_URL`, `WHATSAPP_ROOM`, `WHATSAPP_MERCHANT_ID` | Real WhatsApp channel. Webhook: `POST {PUBLIC_URL}/api/channels/whatsapp/twilio`; watch at `/?room=whatsapp` |
 | `ACTION_SIGNING_KEY`, `ANCHOR_SIGNING_KEY` | Fixed signing keys (random per process otherwise) |
 | `GITHUB_TOKEN`, `ANCHOR_GIST_ID` | Publish audit anchors to a Gist (untested) |

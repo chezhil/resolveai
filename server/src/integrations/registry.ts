@@ -32,7 +32,7 @@ export function connectors(publicUrl?: string): Connector[] {
       name: "Sarvam-105B",
       group: "Brain",
       status: has("sarvam") ? "connected" : "available",
-      detail: `Indic-first chat model as a third fallback (${m.chat}). Tool-calling support is not yet verified.`,
+      detail: `Indic-first chat model as a third fallback (${m.chat}). Tool calling verified against the live API.`,
       setup: ["SARVAM_API_KEY=…", "SARVAM_CHAT=1"],
     },
     {

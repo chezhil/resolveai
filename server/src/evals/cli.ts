@@ -4,6 +4,7 @@
 //                      shadow metrics); relative paths resolve from where you ran npm
 
 import "../env.js";
+import { configuredProviders } from "../agent/llm.js";
 import { runGolden } from "./golden.js";
 import { runShadowReplay } from "./shadow.js";
 import { buildReport } from "./report.js";
@@ -26,7 +27,7 @@ const llm = process.argv.includes("--llm");
 const results = await runGolden({ brain: llm ? "llm" : "planner" });
 
 const pad = (s: string, n: number) => (s.length > n ? s.slice(0, n - 1) + "…" : s.padEnd(n));
-console.log(`\nResolveAI golden cases (${llm ? "LLM: Groq → Gemini" : "offline planner"})\n`);
+console.log(`\nResolveAI golden cases (${llm ? `LLM: ${configuredProviders().map((p) => p.name).join(" → ")}` : "offline planner"})\n`);
 for (const r of results) {
   console.log(`${r.pass ? "✅" : "❌"} ${r.id}  ${pad(r.title, 70)} ${pad(String(r.status ?? "-"), 18)} ${r.maxLevel ?? ""}`);
   for (const c of r.checks.filter((c) => !c.pass)) console.log(`      ✗ ${c.name}${c.detail ? ` (${c.detail})` : ""}`);

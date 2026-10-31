@@ -143,7 +143,8 @@ export class Runtime extends EventEmitter {
     }
 
     const tri = triage(text, merchant.lang);
-    const down = this.modelsDown();
+    // A case configured for the planner never needs the models, so it can't be degraded.
+    const down = this.brainKind() === "llm" ? this.modelsDown() : null;
     const vault = new PiiVault(new Set([...this.world.txns.values()].map((t) => t.rrn)));
     const id = `CASE-${String(this.caseSeq++).padStart(4, "0")}`;
     const kase: Case = {

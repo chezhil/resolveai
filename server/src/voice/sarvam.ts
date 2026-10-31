@@ -38,7 +38,8 @@ const headers = (json = false): Record<string, string> => ({
 
 export async function transcribe(audio: Buffer, mime: string, lang?: string) {
   const form = new FormData();
-  form.append("file", new Blob([new Uint8Array(audio)], { type: mime }), "voice-note.webm");
+  const ext = mime.split(";")[0].split("/")[1]?.replace("x-", "") || "webm";
+  form.append("file", new Blob([new Uint8Array(audio)], { type: mime }), `voice-note.${ext}`);
   form.append("model", sarvamModels().asr);
   if (lang && LANG[lang]) form.append("language_code", LANG[lang]);
   const res = await fetch(`${BASE}/speech-to-text`, { method: "POST", headers: headers(), body: form, signal: AbortSignal.timeout(30_000) });
@@ -55,7 +56,8 @@ export async function speak(text: string, lang: string) {
       text: text.slice(0, 1500),
       target_language_code: LANG[lang] ?? "en-IN",
       model: sarvamModels().tts,
-      speaker: process.env.SARVAM_TTS_SPEAKER ?? "anushka",
+      // "anushka" (the bulbul:v2 default) was dropped in bulbul:v3; "priya" exists on v3.
+      speaker: process.env.SARVAM_TTS_SPEAKER ?? "priya",
     }),
     signal: AbortSignal.timeout(30_000),
   });

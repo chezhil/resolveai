@@ -276,7 +276,7 @@ export const GOLDEN: Golden[] = [
     id: "G12",
     title: "Models down: degraded mode keeps resolving on the deterministic planner",
     category: "resilience",
-    config: { chaosModelOutage: true },
+    config: { chaosModelOutage: true, brain: "llm" },
     run: async (rt) => {
       scenario("A").run(rt);
       await settle(rt, 26 * 60);

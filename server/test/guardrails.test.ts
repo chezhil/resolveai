@@ -183,3 +183,25 @@ describe("Model circuit breaker", () => {
     expect(modelHealth().status).toBe("ok");
   });
 });
+
+describe("Model fallback", () => {
+  it("moves to the next provider when a reasoning model runs out of tokens without answering", async () => {
+    const { LlmBrain } = await import("../src/agent/llm.js");
+    const env = { ...process.env };
+    const realFetch = globalThis.fetch;
+    Object.assign(process.env, { GROQ_API_KEY: "", GEMINI_API_KEY: "g", GEMINI_MODEL: "gemini-test", SARVAM_API_KEY: "s", SARVAM_CHAT: "1" });
+    const reply = (finish: string, message: object) => new Response(JSON.stringify({ choices: [{ finish_reason: finish, message }] }));
+    globalThis.fetch = (async (url: string) =>
+      String(url).includes("sarvam")
+        ? reply("tool_calls", { content: null, tool_calls: [{ id: "t1", type: "function", function: { name: "lookup_merchant", arguments: "{}" } }] })
+        : reply("length", { content: null })) as typeof fetch;
+    try {
+      const turn = await new LlmBrain("system", "hello", "n0nce").next();
+      expect(turn.by).toBe("sarvam:sarvam-105b");
+      expect(turn.calls.map((c) => c.name)).toEqual(["lookup_merchant"]);
+    } finally {
+      globalThis.fetch = realFetch;
+      process.env = env;
+    }
+  });
+});

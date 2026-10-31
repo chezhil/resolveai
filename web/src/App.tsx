@@ -192,7 +192,7 @@ function SimControls({ snap, brainLabel, onReset }: { snap: Snapshot; brainLabel
       >
         <option value="auto">Brain: auto ({brainLabel})</option>
         <option value="llm" disabled={!snap.providers.length}>
-          Brain: Groq → Gemini
+          Brain: LLM ({snap.providers.join(" → ") || "no key"})
         </option>
         <option value="planner">Brain: offline planner</option>
       </select>

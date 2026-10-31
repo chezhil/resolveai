@@ -71,7 +71,7 @@ export function configuredProviders(): Provider[] {
     });
   }
   // Sarvam-105B as an Indic-first third fallback. Opt in with SARVAM_CHAT=1: the same key also powers
-  // voice, and tool-calling on this endpoint has not been verified from this repo.
+  // voice. Tool calling on this endpoint was verified against the live API on 2026-10-31.
   if (process.env.SARVAM_API_KEY && process.env.SARVAM_CHAT === "1") {
     out.push({
       name: "sarvam",
@@ -185,6 +185,12 @@ export class LlmBrain implements Brain {
         const msg = data.choices?.[0]?.message;
         if (!msg) {
           attempts.push(`${p.name}:${model} empty response`);
+          continue;
+        }
+        // A reasoning model can spend the whole budget thinking and return nothing usable. That is
+        // not "done for now": treat it as a failed attempt so the next provider (or the planner) takes over.
+        if (data.choices[0].finish_reason === "length" && !msg.tool_calls?.length) {
+          attempts.push(`${p.name}:${model} ran out of tokens before answering`);
           continue;
         }
         // Keep the assistant message as returned (including provider extras such as Gemini

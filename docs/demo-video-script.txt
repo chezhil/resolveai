@@ -1,0 +1,164 @@
+RESOLVEAI - 3 MINUTE DEMO VIDEO SCRIPT
+======================================
+
+BEFORE YOU RECORD
+-----------------
+- Open: resolveai-production-99b1.up.railway.app/?room=video
+- Browser window 1280x800 or bigger, zoom 100%
+- In the console, click Reset once
+- Model outage toggle: OFF
+- Skip the audit tamper button (it's switched off on the server)
+- Speak a bit slower than feels natural
+
+
+0:00 - 0:20  HOOK AND PROBLEM
+-----------------------------
+SCREEN: Landing page hero. Hold still, then slowly
+scroll to "A stuck payment hides three problems".
+
+SAY:
+"A customer pays a small Paytm merchant. The
+soundbox stays silent. Is the money lost, or just
+late? The merchant doesn't know. Support guesses,
+promises a time it can't keep, and sometimes
+refunds on a bank status that changed minutes
+later."
+
+
+0:20 - 0:40  WHAT RESOLVEAI IS
+------------------------------
+SCREEN: Scroll to "Five steps. Every case." Let the
+Hear > Plan > Check > Act > Verify animation play.
+
+SAY:
+"ResolveAI is an AI support teammate for Paytm
+merchants. Every case runs one loop: hear, plan,
+check, act, verify. The AI only suggests what to
+do. A policy engine written in code decides. And a
+case closes only when the ledger proves the money
+moved."
+
+
+0:40 - 1:25  SCENARIO A - THE SILENT SOUNDBOX
+---------------------------------------------
+SCREEN: Click "Open live demo". In the console,
+click scenario A "Manjunath's Rs 480". Let it run.
+
+SAY:
+"Here's Manjunath. He sends a voice note in
+Kannada."
+
+>> Point at the HEAR step (message with personal
+   data hidden)
+
+"Before any AI sees it, phone numbers and UPI IDs
+are encrypted. This is all the model ever sees."
+
+>> Point at the green ALLOW rows, the rule IDs and
+   the lightning-bolt microseconds
+
+"It checks the ledger, the Paytm gateway and the
+bank, finds the stuck 480 rupees, and raises a bank
+ticket. That's level 1: small, so it acts on its
+own. Every action passes fifteen code rules, and
+that check takes microseconds."
+
+>> Point at the case panel: exact time, watcher,
+   RBI clock
+
+"It tells Manjunath, in Kannada, exactly when the
+money lands, and sets a watcher on itself."
+
+>> Click "+1 day"
+
+"Next morning, the bank credits. The agent re-reads
+the ledger, and only then closes the case.
+Verified, not assumed."
+
+
+1:25 - 1:55  SCENARIO B - TWO-PERSON RULE
+-----------------------------------------
+SCREEN: Click B "Priya's Rs 1.84 L settlement".
+Wait for the approval card.
+
+SAY:
+"Bigger money needs a human. Priya's 1.84 lakh
+settlement is held over a name mismatch. The agent
+runs a bank-account check, then stops at level 2."
+
+>> Click "Approve as Ops lead"
+>> Then click "Approve as Risk lead"
+
+"Above one lakh, two different people must sign.
+One person can't sign twice, and the AI can never
+approve itself."
+
+
+1:55 - 2:15  SCENARIO D - ATTACK BLOCKED
+----------------------------------------
+SCREEN: Click D "Change my payout account, urgent".
+Let it escalate.
+
+SAY:
+"Now an attacker: 'urgent, change my payout
+account.' Rule P1 blocks it outright. Payout
+accounts can never be changed from chat. The fraud
+desk gets a full case file, so nobody has to ask
+the merchant again."
+
+
+2:15 - 2:35  SCENARIO H - LATE BANK MESSAGE
+-------------------------------------------
+SCREEN: Click H "Rs 4,500 paid twice, bank reverses
+one late". When the approval card shows, click
+"simulated late reversal". Show the quarantine
+card, then flip the middle panel to "Provenance"
+for 3 seconds.
+
+SAY:
+"This is the part we're proudest of. A refund waits
+for approval. Then the bank reverses one payment
+late. Every approval remembers the facts it rests
+on, so it's frozen instantly. No human can sign off
+on a picture that's no longer true."
+
+
+2:35 - 2:48  MODEL OUTAGE
+-------------------------
+SCREEN: Turn ON the "Model outage" toggle. Run A
+again. Show the yellow "Degraded mode" banner.
+
+SAY:
+"And if Groq and Gemini both go down? A
+deterministic planner takes over through the same
+rules. Merchants don't notice. If a model dies
+after moving money, we never replay it; a human
+takes over."
+
+
+2:48 - 3:00  PROOF AND THE ASK
+------------------------------
+SCREEN: Open the Analytics (or Evals) tab: 35/35
+and 100% vs 79%. End on the landing hero or logo.
+
+SAY:
+"35 out of 35 test cases, all 11 attacks blocked,
+and the right call on every replayed ticket,
+against 79% for humans. The tickets are synthetic
+and the Paytm systems are simulated. Our ask:
+sandbox APIs and a 30-day shadow pilot. ResolveAI:
+every stuck rupee, resolved and verified."
+
+
+RECORDING TIPS
+--------------
+- Running long? Cut H's Provenance view first, then
+  the model outage part. Never cut scenario A.
+- Scenarios take 8-12 seconds. Talk over them, or
+  speed those bits up 1.5x when editing.
+- Easiest: record the voiceover first, then fit the
+  screen clips to it.
+- Between takes click Reset, or use a new room
+  (?room=video2).
+- Add a small corner caption the whole time:
+  "Simulated Paytm environment - synthetic data"
