@@ -182,6 +182,8 @@ export interface Meta {
   tools: { name: string; kind: string; description: string }[];
   kb: { id: string; source: string; title: string; text: string }[];
   voice: { sarvam: boolean };
+  /** pinRequired: approvers sign with a PIN checked on the server; otherwise identity is simulated. */
+  approvals?: { pinRequired: boolean; approvers: string[] };
   whatsapp: { enabled: boolean; room: string; number: string | null; joinCode: string | null };
 }
 
