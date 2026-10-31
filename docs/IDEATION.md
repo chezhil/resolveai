@@ -43,7 +43,7 @@ Queries it would unlock: payers who dispute across many merchants, merchants wit
 
 - New landing page (dark ledger design, one cyan accent) with a motion-explained loop diagram, 7 interface languages, Paytm and Sarvam AI mentions and an independence disclaimer.
 - Console restyled (soft light theme, self-hosted Geist fonts, no third-party font requests).
-- MCP server: `POST /mcp` (Streamable HTTP, JSON responses, optional `MCP_TOKEN`) and `server/src/mcp/stdio.ts`. Seven tools; no money-moving tool is exposed; covered by `server/test/mcp.test.ts`.
+- MCP server: `POST /mcp` (Streamable HTTP, JSON responses, optional `MCP_TOKEN`) and `server/src/mcp/stdio.ts`. Eight tools; no money-moving tool is exposed; covered by `server/test/mcp.test.ts`.
 - Connectors page at `/app/plugins`: status of every integration, copyable setup commands, a working MCP "list tools" test and a Sarvam translate test.
 - Sarvam adapter: updated model defaults, 11 languages, a translate call, and an opt-in Sarvam-105B fallback (`SARVAM_CHAT=1`).
 - Clock buttons disabled while a case is mid-run (see Problems found).

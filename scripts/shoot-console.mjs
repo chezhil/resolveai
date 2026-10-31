@@ -7,7 +7,7 @@ const BASE = process.argv[2] ?? "http://localhost:5173";
 const OUT = "web/public/shots";
 const CHK = "docs/media";
 fs.mkdirSync(OUT, { recursive: true });
-const b = await chromium.launch({ executablePath: "C:/Program Files/Google/Chrome/Application/chrome.exe", headless: true });
+const b = await chromium.launch({ executablePath: process.env.CHROME_PATH ?? "C:/Program Files/Google/Chrome/Application/chrome.exe", headless: true });
 const p = await b.newPage({ viewport: { width: 1600, height: 900 } });
 const errs = [];
 p.on("pageerror", (e) => errs.push(e.message));

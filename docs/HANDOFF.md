@@ -331,7 +331,9 @@ node scripts/verify-analytics.mjs  http://localhost:8787   # Analytics, live pro
 ### Next
 - ~~Duplicate-debit workflow~~ (done: scenario G, P14, golden cases G18–G21, shadow ticket H-1175 now right).
 - **Fix per-IP rate limiting on Railway** (`TRUST_PROXY_HOPS`, §8).
-- **Real Paytm PG sandbox** behind the `PaytmPg` interface (`integrations/paytm.ts`), with checksum signing.
+- **Real Paytm PG sandbox** behind the `PaytmPg` interface (`integrations/paytm.ts`), with checksum signing. The README section "Paytm APIs: from simulation to live" lists which API each part of the loop needs; the agent, policy and verifier do not change, only the adapters.
+- **FalkorDB graph memory** behind a `GraphMemory` interface (schema in [IDEATION.md](IDEATION.md)); SQLite stays the system of record for cases and the audit chain until it is wired in.
+- **Switch MCP gateway** for Slack, Discord and other chat platforms, beside `channels/whatsapp.ts` (same inbound and outbound hooks).
 - **Persistent rooms** (state in SQLite or Redis) so restarts don't wipe sessions.
 - **Wait-for-CI on Railway** and branch protection on `main` (PRs plus a required CI check).
 - **LLM evals in CI** behind a secret, run nightly.

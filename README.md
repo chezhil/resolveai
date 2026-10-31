@@ -12,6 +12,16 @@ An autonomous customer-service teammate for Paytm merchants and customers. It di
 
 ![ResolveAI resolving Manjunath's ₹480: Kannada voice note → ledger + Paytm PG + bank + UDIR diagnosis → L1 push-credit ticket → exact-time reply in Kannada → watcher fires next morning → verified and closed](docs/media/demo.gif)
 
+![ResolveAI landing page](docs/media/00-landing.png)
+
+## At a glance
+
+| 35 / 35 | 11 / 11 | 14 / 14 vs 11 / 14 | 28 h → 17 s | ~1 ms |
+|---|---|---|---|---|
+| golden cases pass (106 checks) | red-team attacks contained | right calls on replayed tickets, agent vs human agents | median time to a decision, human vs agent | p50 compute to the first action (offline planner) |
+
+Every figure is computed live by the running server on the [Analytics page](#analytics-and-proof), not typed in. The tickets are synthetic stand-ins and time is time to a decision, not time to money; the method and limits are written out in [docs/ANALYTICS.md](docs/ANALYTICS.md).
+
 ---
 
 > **Taking over the project?** Start with [docs/HANDOFF.md](docs/HANDOFF.md): status, architecture, how to change the frontend and backend, deployment, and what to do next.
@@ -41,10 +51,33 @@ ResolveAI owns the case from **first signal to confirmed closure**:
 
 | | |
 |---|---|
+| ![Console: failed payment](docs/media/01-console-failed-payment.png) | ![Verified and closed](docs/media/02-verified-and-closed.png) |
+| **Hear → Plan → Check → Act:** a Kannada voice note, ledger match, bank ticket and an exact-time reply | **Verify:** the watcher fires, the agent re-reads the bank, and the case closes only when the money moved |
 | ![L2 approval](docs/media/03-l2-approval.png) | ![Guardrail escalation](docs/media/04-guardrail-escalation.png) |
 | **L2:** penny-drop clears the blocker, then one-click human approval | **L3:** PII redacted, payout change blocked by policy, fraud desk gets the case file |
 | ![Evals](docs/media/05-evals.png) | ![Audit tamper](docs/media/06-audit-tamper.png) |
 | **35/35 golden cases, incl. 11 red-team attacks** + shadow replay against human decisions | **Anchored audit log:** even a full re-hash of the chain contradicts the published anchors |
+
+![Merchant view at phone width](docs/media/07-mobile.png)
+
+## Features
+
+- **Voice and language:** Kannada, Hindi and English (romanised too), voice notes through Sarvam speech recognition, spoken replies, and a console in seven languages.
+- **Five workflows:** failed payment, settlement hold, dispute evidence, duplicate debit, and account-change requests, plus proactive detection of stuck payments before the merchant complains.
+- **21 tools** (12 read, 6 act, 3 control) behind a signed-capability gate, shaped like MCP tools.
+- **15 policy rules (P0 to P14):** grounding, value tiers, least privilege, velocity, two-person approval, injection handling, never change a payout from chat.
+- **Verifier and watchers:** a case closes only after the systems of record show the money moved, and watchers re-check the bank on the simulated clock.
+- **Belief invalidation:** an approval records the facts it rests on; if the bank changes one mid-decision, the approval is quarantined and the case escalates.
+- **Degraded mode:** if both models fail, a circuit breaker hands cases to the deterministic planner under the same policy engine; a case that already acted fails safe to a human.
+- **PII vault:** sensitive values are tokenised before the model sees them, kept encrypted, and shredded when the case closes.
+- **Tamper-evident audit log:** hash-chained, HMAC-signed anchors published outside the runtime.
+- **Analytics and proof, evals, shadow mode:** see below.
+- **MCP server and plugins page:** other agents can open and read cases; connector status and tests are in the console.
+- **Real WhatsApp** through Twilio, with signature verification (optional).
+
+## Built with
+
+TypeScript throughout. **Backend:** Node.js with Express 5, Zod validation, SQLite (`node:sqlite`) for cases and the audit chain. **Frontend:** React, Vite, Tailwind and GSAP, live over server-sent events. **AI:** Groq and Gemini for reasoning, Sarvam AI for Indic voice and translation, and a deterministic offline planner as the fallback. **Channels and protocols:** Twilio WhatsApp and an MCP server. **Quality:** Vitest, the golden eval suite, and GitHub Actions CI. **Deploy:** Docker on Railway or Render.
 
 ## Run it
 
@@ -125,7 +158,7 @@ flowchart LR
 |---|---|
 | **1 · Hear**: WhatsApp, in-app, IVR, soundbox; Sarvam ASR; PII redaction | [`channels/whatsapp.ts`](server/src/channels/whatsapp.ts) (Twilio webhook with signature verification; voice notes transcribed by Sarvam), [`agent/triage.ts`](server/src/agent/triage.ts) (Kannada / Hindi / English, romanised too; injection detection), [`core/pii.ts`](server/src/core/pii.ts) (tokenises phone, VPA, PAN, Aadhaar, card and account numbers per case), [`voice/sarvam.ts`](server/src/voice/sarvam.ts) |
 | **2 · Plan**: LLM with tool use, RAG on SOPs and NPCI/RBI rules | [`agent/llm.ts`](server/src/agent/llm.ts) (Groq → Gemini over OpenAI-compatible tool calling), [`sim/kb.ts`](server/src/sim/kb.ts) (BM25 over RBI TAT, NPCI UDIR/chargeback rules, SOPs) |
-| **3 · Check**: deterministic policy engine | [`policy/engine.ts`](server/src/policy/engine.ts): rules P0–P13, tier limits, grounding checks, least privilege, velocity, two-person rule; signed capabilities in [`core/capability.ts`](server/src/core/capability.ts) |
+| **3 · Check**: deterministic policy engine | [`policy/engine.ts`](server/src/policy/engine.ts): rules P0–P14, tier limits, grounding checks, least privilege, velocity, two-person rule; signed capabilities in [`core/capability.ts`](server/src/core/capability.ts) |
 | **4 · Act**: MCP-style tools | [`tools/registry.ts`](server/src/tools/registry.ts): 21 tools (12 read, 6 act, 3 control) with JSON schemas, including [`integrations/paytm.ts`](server/src/integrations/paytm.ts), shaped like Paytm PG's Transaction Status API |
 | **5 · Verify**: re-reads state, Sarvam TTS reply | `verifyAndClose` in [`core/runtime.ts`](server/src/core/runtime.ts) plus watchers; soundbox announcement on credit; ▶ listen on every reply (Sarvam TTS or browser voice) |
 | **The spine**: event stream, case memory, approval queue, audit log | [`core/runtime.ts`](server/src/core/runtime.ts), [`core/audit.ts`](server/src/core/audit.ts) (SHA-256 hash chain), [`core/archive.ts`](server/src/core/archive.ts) (SQLite), [`rooms.ts`](server/src/rooms.ts) |
@@ -162,6 +195,20 @@ The model is treated as untrusted. Seven independent layers sit between what it 
 
 Open **`/app/analytics`** for the evidence on one page, computed live by the running server (nothing is typed in): the agent against human agents on 14 replayed tickets (**14/14 vs 11/14 right**, median **28 h vs 17 s** to a decision), a ticket-by-ticket timeline, the cards where a human got it wrong and what the agent did instead, the 35-case golden suite by category, what the policy engine refused, this session's live charts, and a capability comparison with the method and its limits written out. The same headline numbers are on the landing page, fetched from `GET /api/proof` (one shared, cached run). Details and how to read it honestly: [docs/ANALYTICS.md](docs/ANALYTICS.md).
 
+### Benchmarks
+
+| Measure | Result | How it is measured |
+|---|---|---|
+| Golden suite | **35/35 cases, 106/106 checks** | Fresh isolated world per case; asserts on the ledger, settlement UTR, dispute ack and payout account, not on the agent's text |
+| Red-team | **11/11 contained** | Forged and replayed capabilities, prompt injection, forged approvals, payout change by chat, PII leaks, message floods, history rewrites |
+| Shadow replay | **Agent right on 14/14 tickets, humans on 11/14 (79%)**; agreement 86% | 14 synthetic historical tickets scored against the action a reviewer marked right |
+| Time to a decision | **Median 28 h (human, recorded) vs 17 s (agent, simulated clock)** | Time to a decision, not to money; the bank still takes its real time |
+| Contacts avoided | **23** across the 14 tickets | Human contacts per ticket minus one agent contact |
+| Loop compute | **p50 about 1 ms, p95 about 5 ms** (offline planner, demo pacing off) | Excludes model latency, which depends on the provider |
+| Unit tests | **36 passing** across 4 files | `npm test` |
+
+Re-run everything with `npm test`, `npm run eval` and the **Re-run the evidence** button. The synthetic tickets mean these are a demonstration of the method, not a production measurement; a 30-day shadow pilot on real tickets is the next step.
+
 ## Evals
 
 ```bash
@@ -185,8 +232,42 @@ npm run eval
 |---|---|---|
 | LLM brain | `GROQ_API_KEY` (+ `GEMINI_API_KEY` for the fallback) | The brain switches automatically; pick it in the top bar |
 | Indic voice | `SARVAM_API_KEY` | 🎙 records a voice note → Sarvam ASR; ▶ listen and the soundbox use Sarvam TTS. Without it the browser's speech APIs are used |
-| WhatsApp | `TWILIO_ACCOUNT_SID`, `TWILIO_AUTH_TOKEN`, `TWILIO_WHATSAPP_FROM`, `TWILIO_SANDBOX_JOIN`, `PUBLIC_URL` | Point the Twilio sandbox webhook at `POST {PUBLIC_URL}/api/channels/whatsapp/twilio`. Messages (and voice notes) from your phone open cases as Manjunath in the `whatsapp` room (`/?room=whatsapp`); replies come back to your phone |
-| Paytm PG | – | `paytm_order_status` runs against the mock in [`integrations/paytm.ts`](server/src/integrations/paytm.ts); implement `PaytmPg` against the staging gateway to go live |
+| WhatsApp | `TWILIO_ACCOUNT_SID`, `TWILIO_AUTH_TOKEN`, `TWILIO_WHATSAPP_FROM`, `TWILIO_SANDBOX_JOIN`, `PUBLIC_URL` | Point the Twilio sandbox webhook at `POST {PUBLIC_URL}/api/channels/whatsapp/twilio`. Messages (and voice notes) from your phone open cases as Manjunath in the `whatsapp` room; replies come back to your phone. That room is not reachable from the public API, so it cannot be driven by other visitors |
+| Paytm PG | – | `paytm_order_status` runs against the mock in [`integrations/paytm.ts`](server/src/integrations/paytm.ts); see [Paytm APIs](#paytm-apis-from-simulation-to-live) for the move to live endpoints |
+
+### Production settings
+
+| Setting | Why |
+|---|---|
+| `APPROVER_OPS_PIN`, `APPROVER_RISK_PIN` | Approver identity comes from the PIN. Without them identity is simulated and the two-person rule is enforced per client address only |
+| `MCP_TOKEN` | Required when `NODE_ENV=production`; otherwise `/mcp` answers 503. Callers without an `x-room` get a room per client address |
+| `ACTION_SIGNING_KEY`, `ANCHOR_SIGNING_KEY` | Keep tokens and audit anchors valid across restarts; anchor signatures are verified on every check |
+| `TRUST_PROXY_HOPS`, `WRITE_RATE_PER_MIN`, `VOICE_RATE_PER_MIN` | Per-IP limits, including a tighter bucket for the paid Sarvam routes |
+| `DEMO_ENDPOINTS=1` | Re-enables the audit tamper demo, which is off in production by default |
+
+## Integrations and how they fit
+
+| Integration | Role in ResolveAI | Status in this repo |
+|---|---|---|
+| **Groq, Gemini** | Primary and fallback reasoning models over OpenAI-compatible tool calling | Wired: [`agent/llm.ts`](server/src/agent/llm.ts) |
+| **Sarvam AI** | Indic speech recognition, spoken replies and translation | Wired: [`voice/sarvam.ts`](server/src/voice/sarvam.ts), needs `SARVAM_API_KEY` |
+| **Twilio WhatsApp** | The real merchant channel | Wired: [`channels/whatsapp.ts`](server/src/channels/whatsapp.ts) |
+| **MCP** | Lets other agents open and read cases; no money-moving tool is exposed | Wired: [`mcp/handler.ts`](server/src/mcp/handler.ts) |
+| **FalkorDB** | Graph memory for the case provenance graph (facts → conclusions → actions) across cases: payers disputing across merchants, repeat stuck-payment banks, rings of cases sharing a device | Listed as a connector on the Plugins page with a ready `docker run`; the schema and a `GraphMemory` interface are in [docs/IDEATION.md](docs/IDEATION.md). Not wired into the runtime yet, so cases are stored in SQLite today |
+| **Switch MCP server** | A gateway to bring Slack, Discord and other chat platforms into the same inbound and outbound hooks WhatsApp uses | Not in the codebase yet. The channel layer is already adapter-shaped, so it would sit beside `channels/whatsapp.ts` |
+
+## Paytm APIs: from simulation to live
+
+Everything the agent knows comes from a tool call, and today those tools read a simulated Paytm world in [`sim/world.ts`](server/src/sim/world.ts). Live Paytm APIs are what turn ResolveAI from a proven method into something merchants and customers feel.
+
+| ResolveAI needs | Paytm API access | What it changes in real time |
+|---|---|---|
+| Is the payment stuck, and why? | Transaction status (the adapter in [`integrations/paytm.ts`](server/src/integrations/paytm.ts) is already shaped like the PG Transaction Status API), ledger and bank status | The root cause is read from the system of record, not guessed; the merchant hears the exact time instead of "raise a ticket" |
+| Detect it before anyone complains | Payment event stream or webhooks | The stuck-payment detector acts within minutes; the soundbox stays silent for minutes, not days |
+| Fix it | Ticketing, settlement and dispute APIs | Push-credit tickets, settlement releases and dispute evidence are filed by the agent inside policy, with one-click approval above the limits |
+| Prove it worked | The same read APIs, polled by the watchers | The case closes only when a credit or UTR is visible, so "resolved" means the money moved |
+
+Why it is crucial: the policy engine, verifier and audit log are only as trustworthy as the facts under them. With live data, a customer sees their money back sooner, a merchant stops losing sales to a silent soundbox, and support teams stop working across five tabs. Moving off the simulation is a change to the adapters, not to the agent, policy or verifier. The steps and the sandbox access we would ask Paytm for are in [Roadmap](#roadmap-earn-trust-in-stages) and [docs/HANDOFF.md](docs/HANDOFF.md).
 
 ## Impact (targets, to be validated in a 30-day shadow pilot)
 
@@ -234,7 +315,7 @@ MIT License.
 ## Landing page, plugins and belief invalidation
 
 - **Landing page** at `/`, console at `/app`. The landing page walks the five-step loop (Hear, Plan, Check, Act, Verify) as you scroll, shows the four autonomy levels, a live human-against-agent timeline, an FAQ and a full footer; motion respects `prefers-reduced-motion`. Seven interface languages (English, Hindi, Kannada, Tamil, Telugu, Marathi, Bengali); the strings need a native-speaker review before launch.
-- **MCP server**: `POST /mcp` (Streamable HTTP) or `npx tsx server/src/mcp/stdio.ts`. Seven tools; no money-moving tool is exposed, so every issue goes through policy. Set `MCP_TOKEN` on any public deploy.
+- **MCP server**: `POST /mcp` (Streamable HTTP) or `npx tsx server/src/mcp/stdio.ts`. Eight tools; no money-moving tool is exposed, so every issue goes through policy. Set `MCP_TOKEN` on any public deploy.
 - **Plugins page** (`/app/plugins`): connector status, copyable setup commands, an MCP test and a Sarvam translate test.
 - **Belief invalidation**: every approval records the ledger rows or settlement it rests on. If the bank changes one while a human is deciding (scenario H, "Simulate late bank reversal"), the approval is quarantined, cannot be signed, and the case escalates with the changed fact attached. Covered by golden case G22.
 - **RBI TAT clock** on failed-payment cases: T+1, then compensation per day.
