@@ -146,3 +146,21 @@ describe("Prompt-injection policy (P10)", () => {
     expect(d.rules).toContain("P10");
   });
 });
+
+describe("Eval JSON report", () => {
+  it("summarises pass rates per category, latency and shadow metrics", async () => {
+    const { buildReport, latencyStats } = await import("../src/evals/report.js");
+    const golden = [
+      { id: "A", title: "a", category: "workflow", pass: true, checks: [], toolCalls: [], ms: 10 },
+      { id: "B", title: "b", category: "workflow", pass: false, checks: [{ name: "x", pass: false, detail: "why" }], toolCalls: [], ms: 30 },
+      { id: "C", title: "c", category: "red-team", pass: true, checks: [], toolCalls: [], ms: 20 },
+    ];
+    const shadow = { rows: [{ agentSeconds: 4 }, { agentSeconds: 2 }], agreement: 0.5, agentCorrect: 1, humanCorrect: 0.5, medianHumanMinutes: 30, contactsAvoided: 3 };
+    const r = buildReport({ brain: "planner", golden, shadow: shadow as never, now: new Date(0) });
+    expect(r).toMatchObject({ ok: false, golden: { total: 3, passed: 2, passRate: 0.6667 } });
+    expect(r.golden.byCategory).toEqual({ workflow: { total: 2, passed: 1, passRate: 0.5 }, "red-team": { total: 1, passed: 1, passRate: 1 } });
+    expect(r.golden.cases[1].failedChecks).toEqual([{ name: "x", detail: "why" }]);
+    expect(r.shadow).toMatchObject({ tickets: 2, agentCorrectRate: 1, medianAgentSeconds: 2 });
+    expect(latencyStats([10, 30, 20])).toEqual({ totalMs: 60, meanMs: 20, p50Ms: 20, p95Ms: 30, maxMs: 30 });
+  });
+});

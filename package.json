@@ -12,7 +12,7 @@
     "build": "npm run build -w web",
     "start": "npm run build && npm run start -w server",
     "test": "npm test -w server",
-    "eval": "npm run eval -w server",
+    "eval": "npm run eval -w server --",
     "typecheck": "npm run typecheck -w server && npm run typecheck -w web"
   },
   "devDependencies": {
