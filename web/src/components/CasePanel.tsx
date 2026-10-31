@@ -34,6 +34,11 @@ export function CasePanel({ kase, approvals, watchers }: { kase?: Case; approval
           {kase.shadow && <Pill>Shadow</Pill>}
           <Pill>{kase.lang === "kn" ? "Kannada" : kase.lang === "hi" ? "Hindi" : "English"}</Pill>
           <Pill>{kase.brain === "llm" ? "Groq/Gemini" : "Planner"}</Pill>
+          {kase.degraded && (
+            <span title={kase.degraded.reason}>
+              <Pill tone="sun">{kase.degraded.mode === "takeover" ? "⚠ Planner took over" : "⚠ Degraded mode"}</Pill>
+            </span>
+          )}
           {kase.pii && kase.pii.items > 0 && (
             <Pill tone={kase.pii.shredded ? "white" : "sky"}>{kase.pii.shredded ? `🔒 ${kase.pii.items} PII · shredded` : `🔒 ${kase.pii.items} PII · ${kase.pii.cipher}`}</Pill>
           )}

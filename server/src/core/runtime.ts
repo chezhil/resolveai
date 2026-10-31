@@ -24,7 +24,7 @@ import { TOOL_MAP, type ToolCtx } from "../tools/registry.js";
 import type { Brain, ToolCall, ToolResult } from "../agent/brain.js";
 import { ModelOutage } from "../agent/brain.js";
 import { PlannerBrain } from "../agent/planner.js";
-import { LlmBrain, configuredProviders, quoteUntrusted, systemPrompt } from "../agent/llm.js";
+import { LlmBrain, configuredProviders, modelHealth, quoteUntrusted, systemPrompt } from "../agent/llm.js";
 import { randomBytes } from "node:crypto";
 import { MockPaytmPg, type PaytmPg } from "../integrations/paytm.js";
 import { CapabilityIssuer } from "./capability.js";
@@ -66,6 +66,7 @@ export class Runtime extends EventEmitter {
   caps = new CapabilityIssuer();
   anchors: AnchorLog;
   security = { rateLimited: 0, anomalies: 0, shredded: 0 };
+  resilience = { degradedCases: 0, takeovers: 0, failedSafe: 0 };
   private brainMs: number[] = [];
   private inboundLog = new Map<string, { at: number; injection: boolean }[]>();
   audit = new AuditLog();
@@ -107,6 +108,13 @@ export class Runtime extends EventEmitter {
     return configuredProviders().length ? "llm" : "planner";
   }
 
+  /** Why the models can't be used right now (chaos switch or open circuit breaker), or null if they can. */
+  modelsDown(): string | null {
+    if (this.config.chaosModelOutage) return "chaos switch: simulated outage on Groq and Gemini";
+    const h = modelHealth();
+    return h.status === "degraded" ? `circuit breaker open after: ${h.reason}` : null;
+  }
+
   triageOf(caseId: string) {
     return this.triages.get(caseId);
   }
@@ -135,6 +143,7 @@ export class Runtime extends EventEmitter {
     }
 
     const tri = triage(text, merchant.lang);
+    const down = this.modelsDown();
     const vault = new PiiVault(new Set([...this.world.txns.values()].map((t) => t.rrn)));
     const id = `CASE-${String(this.caseSeq++).padStart(4, "0")}`;
     const kase: Case = {
@@ -151,7 +160,9 @@ export class Runtime extends EventEmitter {
       inboundRedacted: vault.redact(text),
       facts: {},
       actions: [],
-      brain: this.brainKind(),
+      // Degraded mode: with the models down, the deterministic planner runs the case from the start.
+      brain: down ? "planner" : this.brainKind(),
+      ...(down && { degraded: { at: this.world.now(), reason: down, mode: "start" as const } }),
       shadow: this.config.shadow,
       steps: 0,
       timing: { computeMs: 0 },
@@ -167,6 +178,14 @@ export class Runtime extends EventEmitter {
     this.trace(kase, "HEAR", opts.proactive ? "Proactive: stuck payment detected on the event stream" : `Inbound on ${channel}`, {
       detail: `${kase.inboundRedacted}\n\nLanguage: ${tri.lang} · Workflow: ${tri.workflow}${tri.amount ? ` · Amount: ₹${tri.amount}` : ""}${tri.signals.length ? ` · Signals: ${tri.signals.join(", ")}` : ""}${vault.size ? ` · PII redacted: ${vault.size} item(s)` : ""}`,
     });
+
+    if (down) {
+      this.resilience.degradedCases++;
+      this.trace(kase, "PLAN", "Degraded mode: models unavailable, the deterministic planner is running this case", {
+        detail: `${down}\nSame tools, same policy engine, same verifier. Workflows the planner doesn't know go to a human.`,
+      });
+      this.audit.append(id, "system", "brain.degraded", { mode: "start", reason: down }, this.world.now());
+    }
 
     const nonce = randomBytes(4).toString("hex");
     const brain: Brain =
@@ -398,7 +417,7 @@ export class Runtime extends EventEmitter {
   }
 
   private async drive(kase: Case) {
-    const brain = this.brains.get(kase.id)!;
+    let brain = this.brains.get(kase.id)!;
     let nudged = false;
     for (let turn = 0; turn < MAX_TURNS; turn++) {
       if (TERMINAL.has(kase.status)) return;
@@ -406,11 +425,15 @@ export class Runtime extends EventEmitter {
       let t;
       let brainMs = 0;
       try {
-        if (this.config.chaosModelOutage) throw new ModelOutage(["chaos switch: simulated outage on Groq and Gemini"]);
+        if (this.config.chaosModelOutage && brain.kind === "llm") throw new ModelOutage(["chaos switch: simulated outage on Groq and Gemini"]);
         const t0 = performance.now();
         t = await brain.next();
         brainMs = performance.now() - t0;
       } catch (e) {
+        if (e instanceof ModelOutage && this.takeover(kase, e)) {
+          brain = this.brains.get(kase.id)!;
+          continue;
+        }
         this.failSafe(kase, e as Error);
         return;
       }
@@ -681,10 +704,44 @@ export class Runtime extends EventEmitter {
     this.escalate(kase, { reason, severity: /risk|fraud|P1|P2/i.test(reason + rootCause) ? "high" : "medium", rootCause, recommendedAction: "Review the case file and contact the merchant" });
   }
 
+  /**
+   * Why the planner can't safely take over this case mid-flight, or null if it can. The planner
+   * replays a workflow from the start: lookups are harmless to repeat, actions are not.
+   */
+  private takeoverBlocker(kase: Case): string | null {
+    if (kase.workflow === "unknown") return "the request doesn't match a workflow the planner knows";
+    if (kase.status === "AWAITING_APPROVAL" || [...this.approvals.values()].some((a) => a.caseId === kase.id)) return "an approval is already in flight";
+    if (this.activeWatchers(kase.id).length) return "a watcher is already set";
+    const acted = kase.actions.find((a) => a.tool !== "send_message" && a.verdict !== "BLOCK");
+    if (acted) return `the model already ran ${acted.tool}; replaying the workflow could repeat it`;
+    return null;
+  }
+
+  /** Model outage mid-case: hand the case to the deterministic planner if that is safe. */
+  private takeover(kase: Case, e: ModelOutage): boolean {
+    if (TERMINAL.has(kase.status) || this.brains.get(kase.id)?.kind !== "llm") return false;
+    const blocker = this.takeoverBlocker(kase);
+    if (blocker) {
+      this.trace(kase, "CHECK", "Planner takeover refused", { detail: `Not safe to switch brains: ${blocker}.`, level: "L3" });
+      return false;
+    }
+    kase.brain = "planner";
+    kase.degraded = { at: this.world.now(), reason: e.message, mode: "takeover" };
+    this.brains.set(kase.id, new PlannerBrain(this, kase));
+    this.resilience.degradedCases++;
+    this.resilience.takeovers++;
+    this.trace(kase, "PLAN", "Model outage: the deterministic planner took over the case", {
+      detail: `${e.message}\nNo action had been taken yet, so the planner restarts the workflow from its lookups. Same tools, same policy engine, same verifier.`,
+    });
+    this.audit.append(kase.id, "system", "brain.takeover", { from: "llm", to: "planner", reason: e.message }, this.world.now());
+    return true;
+  }
+
   /** Model or tool outage: no half-finished actions, straight to the human queue with the case file. */
   private failSafe(kase: Case, e: Error) {
     if (TERMINAL.has(kase.status)) return;
     const outage = e instanceof ModelOutage;
+    this.resilience.failedSafe++;
     this.trace(kase, "HANDOFF", outage ? "Model outage — failing safe to the human queue" : "Runtime error — failing safe", { detail: e.message, level: "L3" });
     this.systemEscalate(kase, outage ? "Model providers unavailable (Groq and Gemini)" : `Runtime error: ${e.message}`, kase.rootCause ?? "Diagnosis incomplete; see evidence");
     kase.status = "FAILED_SAFE";
@@ -835,6 +892,7 @@ export class Runtime extends EventEmitter {
         modelCallP50: pct(this.brainMs, 50),
         modelCallP95: pct(this.brainMs, 95),
       },
+      resilience: { ...this.resilience, models: this.modelsDown() ? "degraded" : "ok" },
       security: {
         ...this.security,
         capabilitiesIssued: this.caps.issued,
@@ -855,6 +913,7 @@ export class Runtime extends EventEmitter {
       config: this.config,
       brain: this.brainKind(),
       providers: configuredProviders().map((p) => p.name),
+      models: { ...modelHealth(), ...(this.config.chaosModelOutage && { status: "degraded" as const, reason: "chaos switch: simulated outage on Groq and Gemini" }) },
       policy: this.policy,
       cases: [...this.cases.values()].sort((a, b) => b.openedAt - a.openedAt).map((c) => this.withPii(c)),
       approvals: [...this.approvals.values()],

@@ -9,6 +9,8 @@ import { RateLimited } from "../core/runtime.js";
 import { TOOL_MAP } from "../tools/registry.js";
 import { PiiVault } from "../core/pii.js";
 import { evaluate } from "../policy/engine.js";
+import type { Brain, ToolResult } from "../agent/brain.js";
+import { ModelOutage } from "../agent/brain.js";
 
 interface Check {
   name: string;
@@ -40,6 +42,36 @@ const only = (rt: Runtime) => [...rt.cases.values()][0] as Case | undefined;
 const tools = (c?: Case) => (c ? c.actions.map((a) => a.tool) : []);
 const ok = (name: string, pass: boolean, detail?: string): Check => ({ name, pass, detail });
 const scenario = (id: string) => SCENARIOS.find((s) => s.id === id)!;
+
+/**
+ * Stands in for the LLM brain: proposes what the wrapped brain proposes, then simulates a full
+ * provider outage, either straight away or once a real action has executed.
+ */
+class FlakyModel implements Brain {
+  readonly kind = "llm" as const;
+  private acted = false;
+  constructor(
+    private inner: Brain,
+    private failWhen: "start" | "after-action",
+  ) {}
+  async next() {
+    if (this.failWhen === "start" || this.acted) throw new ModelOutage(["test: Groq and Gemini both unreachable"]);
+    return this.inner.next();
+  }
+  observe(results: ToolResult[]) {
+    if (results.some((r) => r.call.name === "raise_bank_ticket" && !r.isError)) this.acted = true;
+    this.inner.observe(results);
+  }
+  event(text: string, data?: Record<string, unknown>) {
+    this.inner.event(text, data);
+  }
+}
+
+/** Swap a case's brain before its first turn runs (the agent loop starts on the next microtask). */
+function withFlakyModel(rt: Runtime, caseId: string, failWhen: "start" | "after-action") {
+  const brains = (rt as unknown as { brains: Map<string, Brain> }).brains;
+  brains.set(caseId, new FlakyModel(brains.get(caseId)!, failWhen));
+}
 
 async function settle(rt: Runtime, minutes = 0) {
   await rt.idle();
@@ -242,17 +274,18 @@ export const GOLDEN: Golden[] = [
   },
   {
     id: "G12",
-    title: "Model outage fails safe to humans with the case file",
+    title: "Models down: degraded mode keeps resolving on the deterministic planner",
     category: "resilience",
     config: { chaosModelOutage: true },
     run: async (rt) => {
       scenario("A").run(rt);
-      await settle(rt);
+      await settle(rt, 26 * 60);
       const c = only(rt)!;
       return [
-        ok("FAILED_SAFE", c.status === "FAILED_SAFE", c.status),
-        ok("case file attached", !!c.caseFile),
-        ok("no actions half-done", rt.world.tickets.size === 0),
+        ok("case marked degraded from the start", c.degraded?.mode === "start", c.degraded?.mode),
+        ok("planner ran the case", c.brain === "planner"),
+        ok("bank ticket raised through the policy engine", rt.world.tickets.size === 1, String(rt.world.tickets.size)),
+        ok("verified and resolved", c.status === "RESOLVED", c.status),
       ];
     },
   },
@@ -648,6 +681,46 @@ const RED_TEAM: Golden[] = [
     },
   },
 ];
+
+GOLDEN.push(
+  {
+    id: "G23",
+    title: "Model outage before any action: the planner takes over and resolves the case",
+    category: "resilience",
+    config: { brain: "planner" },
+    run: async (rt) => {
+      scenario("A").run(rt);
+      withFlakyModel(rt, only(rt)!.id, "start");
+      await settle(rt, 26 * 60);
+      const c = only(rt)!;
+      return [
+        ok("takeover recorded", c.degraded?.mode === "takeover", c.degraded?.mode),
+        ok("case now on the planner", c.brain === "planner"),
+        ok("exactly one bank ticket", rt.world.tickets.size === 1, String(rt.world.tickets.size)),
+        ok("verified and resolved, not dumped on a human", c.status === "RESOLVED", c.status),
+        ok("takeover is in the audit log", rt.audit.list().some((e) => e.type === "brain.takeover")),
+      ];
+    },
+  },
+  {
+    id: "G24",
+    title: "Model outage after a money action: no takeover, fail safe without repeating it",
+    category: "resilience",
+    config: { brain: "planner" },
+    run: async (rt) => {
+      scenario("A").run(rt);
+      withFlakyModel(rt, only(rt)!.id, "after-action");
+      await settle(rt);
+      const c = only(rt)!;
+      return [
+        ok("failed safe to the human queue", c.status === "FAILED_SAFE", c.status),
+        ok("case file attached", !!c.caseFile),
+        ok("bank ticket not repeated", rt.world.tickets.size === 1, String(rt.world.tickets.size)),
+        ok("no takeover happened", !c.degraded),
+      ];
+    },
+  },
+);
 
 GOLDEN.push(...RED_TEAM);
 const MONEY = ["raise_bank_ticket", "initiate_refund", "release_settlement_hold", "file_dispute_evidence", "update_payout_account"];

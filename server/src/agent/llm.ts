@@ -1,6 +1,7 @@
 // LlmBrain: tool-calling agent over OpenAI-compatible chat completions.
-// Groq is the primary provider (low latency); Gemini is the fallback. If both fail the runtime
-// fails safe to the human queue with the case file attached.
+// Groq is the primary provider (low latency); Gemini is the fallback. If every provider fails,
+// a circuit breaker opens and the runtime hands the case to the deterministic planner (degraded
+// mode) when that is safe, or to the human queue with the case file attached when it is not.
 
 import type { Brain, BrainTurn, ToolCall, ToolResult } from "./brain.js";
 import { ModelOutage } from "./brain.js";
@@ -17,6 +18,37 @@ interface Provider {
 type Msg = Record<string, unknown> & { role: "system" | "user" | "assistant" | "tool" };
 
 const resolved = new Map<string, string>();
+
+/** Per-provider request timeout: fail over quickly instead of hanging a merchant on one slow model. */
+const TIMEOUT_MS = Number(process.env.MODEL_TIMEOUT_MS ?? 20_000);
+/** After a full outage, new cases skip the models for this long before trying them again. */
+const COOLDOWN_MS = Number(process.env.MODEL_COOLDOWN_MS ?? 60_000);
+
+const breaker = { openUntil: 0, reason: "", trips: 0 };
+
+export interface ModelHealth {
+  status: "ok" | "degraded";
+  reason?: string;
+  /** Wall-clock ms when the models will be tried again. */
+  retryAt?: number;
+  trips: number;
+}
+
+/** Circuit breaker state, shared by every room: a provider outage is not per visitor. */
+export function modelHealth(now = Date.now()): ModelHealth {
+  return breaker.openUntil > now ? { status: "degraded", reason: breaker.reason, retryAt: breaker.openUntil, trips: breaker.trips } : { status: "ok", trips: breaker.trips };
+}
+
+export function tripBreaker(reason: string, now = Date.now()) {
+  breaker.openUntil = now + COOLDOWN_MS;
+  breaker.reason = reason;
+  breaker.trips++;
+}
+
+export function resetBreaker() {
+  breaker.openUntil = 0;
+  breaker.reason = "";
+}
 
 export function configuredProviders(): Provider[] {
   const out: Provider[] = [];
@@ -143,7 +175,7 @@ export class LlmBrain implements Brain {
           method: "POST",
           headers: { "Content-Type": "application/json", Authorization: `Bearer ${p.key}`, ...(p.name === "sarvam" && { "api-subscription-key": p.key }) },
           body: JSON.stringify({ model, messages: this.messages, tools: llmTools(), tool_choice: "auto", temperature: 0.2, max_tokens: 4096 }),
-          signal: AbortSignal.timeout(60_000),
+          signal: AbortSignal.timeout(TIMEOUT_MS),
         });
         if (!res.ok) {
           attempts.push(`${p.name}:${model} HTTP ${res.status} ${(await res.text()).slice(0, 200)}`);
@@ -167,12 +199,15 @@ export class LlmBrain implements Brain {
             return { id: tc.id, name: tc.function.name, input: {}, parseError: "Arguments were not valid JSON" };
           }
         });
+        resetBreaker();
         return { thought: typeof msg.content === "string" && msg.content.trim() ? msg.content.trim() : undefined, calls, by: `${p.name}:${model}` };
       } catch (e) {
         attempts.push(`${p.name}:${model} ${(e as Error).message}`);
       }
     }
-    throw new ModelOutage(attempts.length ? attempts : ["no provider configured"]);
+    const outage = new ModelOutage(attempts.length ? attempts : ["no provider configured"]);
+    tripBreaker(outage.message);
+    throw outage;
   }
 
   observe(results: ToolResult[]) {

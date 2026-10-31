@@ -135,6 +135,8 @@ export interface Case {
   /** Compute time spent on the case, and how long until the first action was proposed. */
   timing: { computeMs: number; firstActionMs?: number };
   pii?: { items: number; cipher: string; shredded: boolean };
+  /** Set when the models were unavailable and the deterministic planner ran (or took over) the case. */
+  degraded?: { at: number; reason: string; mode: "start" | "takeover" };
   /** Turnaround clock for a debited-but-not-credited payment (RBI harmonised TAT: T+1, then compensation per day). */
   tat?: { rule: string; deadlineAt: number; state: "met" | "running" | "breached"; penaltyPerDay: number; hoursLeft: number };
 }

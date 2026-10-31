@@ -164,3 +164,22 @@ describe("Eval JSON report", () => {
     expect(latencyStats([10, 30, 20])).toEqual({ totalMs: 60, meanMs: 20, p50Ms: 20, p95Ms: 30, maxMs: 30 });
   });
 });
+
+describe("Model circuit breaker", () => {
+  it("starts new cases on the planner in degraded mode while the breaker is open, then recovers", async () => {
+    const { tripBreaker, resetBreaker, modelHealth } = await import("../src/agent/llm.js");
+    tripBreaker("test: Groq 503, Gemini timeout");
+    try {
+      expect(modelHealth().status).toBe("degraded");
+      const rt = new Runtime({ pacingMs: 0, brain: "llm" });
+      const kase = rt.inbound("M1001", "customer pay maadidru, soundbox enu helilla.", "whatsapp");
+      expect(kase.brain).toBe("planner");
+      expect(kase.degraded?.mode).toBe("start");
+      await rt.idle();
+      expect(rt.world.tickets.size).toBe(1);
+    } finally {
+      resetBreaker();
+    }
+    expect(modelHealth().status).toBe("ok");
+  });
+});

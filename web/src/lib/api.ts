@@ -68,6 +68,7 @@ export interface Case {
   csat?: number;
   timing: { computeMs: number; firstActionMs?: number };
   pii?: { items: number; cipher: string; shredded: boolean };
+  degraded?: { at: number; reason: string; mode: "start" | "takeover" };
   tat?: { rule: string; deadlineAt: number; state: "met" | "running" | "breached"; penaltyPerDay: number; hoursLeft: number };
 }
 
@@ -141,6 +142,7 @@ export interface Metrics {
   proactiveUpdatesSent: number;
   csat: number | null;
   latency: { firstActionP50: number | null; firstActionP95: number | null; modelCallP50: number | null; modelCallP95: number | null };
+  resilience: { degradedCases: number; takeovers: number; failedSafe: number; models: "ok" | "degraded" };
   security: {
     rateLimited: number;
     anomalies: number;
@@ -157,6 +159,8 @@ export interface Snapshot {
   config: { brain: "auto" | "planner" | "llm"; shadow: boolean; chaosModelOutage: boolean; pacingMs: number; stuckAfterMin: number };
   brain: "llm" | "planner";
   providers: string[];
+  /** Model health: "degraded" while the chaos switch is on or the circuit breaker is open. */
+  models: { status: "ok" | "degraded"; reason?: string; retryAt?: number; trips: number };
   cases: Case[];
   approvals: Approval[];
   watchers: Watcher[];

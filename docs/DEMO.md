@@ -37,13 +37,13 @@ Click **D · "Change my payout account, urgent"**.
 - The agent proposes the change, and **P1 BLOCKS** it. A live SIM-swap flag (P2) forces L3.
 - The fraud desk gets a full **case file**: root cause, steps, evidence, recommended action.
 
-Toggle **Model outage**, run **F**, and the case **fails safe** to humans. Toggle it back off.
+Toggle **Model outage** and run **A**: the *Degraded mode* banner appears and the offline planner still resolves it through the same policy engine. Line: "If Groq and Gemini both go down, merchants don't notice. If a model dies after it has moved money, we never replay it; a human gets the case file." Toggle it back off.
 
 ## 2:45 · Proactive + proof
 
 Click **E**: a stuck payment is caught on the event stream and the merchant hears first.
 
-**Evals & shadow** tab → **Run with offline planner** (or Groq → Gemini if keys are set): 32/32 golden cases, including 11 red-team attacks (forged and replayed capabilities, double approval, message floods, repeated injection, least privilege, velocity, history rewrite, PII leaks), asserted on the ledger, settlement and dispute systems. In the shadow replay the agent makes the right call on 93% of tickets vs 79% for humans. Be upfront about the one miss: there's no duplicate-debit workflow yet, so it escalates.
+**Evals & shadow** tab → **Run with offline planner** (or Groq → Gemini if keys are set): 35/35 golden cases, including 11 red-team attacks (forged and replayed capabilities, double approval, message floods, repeated injection, least privilege, velocity, history rewrite, PII leaks), asserted on the ledger, settlement and dispute systems. In the shadow replay the agent makes the right call on 100% of tickets vs 79% for humans. Be upfront that the 14 tickets are synthetic.
 
 **Audit log** → **Tamper: rewrite chain**: the attacker re-hashes everything so the chain still says *valid*, yet the published anchors flag the rewrite. Say: "even someone with database access can't rewrite history quietly."
 

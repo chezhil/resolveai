@@ -15,7 +15,7 @@ import { runShadowReplay } from "./evals/shadow.js";
 import { RULES } from "./policy/engine.js";
 import { TOOLS } from "./tools/registry.js";
 import { KB } from "./sim/kb.js";
-import { configuredProviders } from "./agent/llm.js";
+import { configuredProviders, modelHealth } from "./agent/llm.js";
 import { SARVAM_LANGS, sarvamEnabled, sarvamModels, speak, transcribe, translate } from "./voice/sarvam.js";
 import { connectors } from "./integrations/registry.js";
 import { handleMcp } from "./mcp/handler.js";
@@ -120,7 +120,7 @@ app.post(/^\/api\/(?!channels).*/, limiter(Number(process.env.WRITE_RATE_PER_MIN
 // Evals spin up many worlds; keep one run at a time per process.
 let evalRun: Promise<unknown> | null = null;
 
-app.get("/api/health", (_q, s) => s.json({ ok: true, rooms: roomCount(), providers: configuredProviders().map((p) => p.name) }));
+app.get("/api/health", (_q, s) => s.json({ ok: true, rooms: roomCount(), providers: configuredProviders().map((p) => p.name), models: modelHealth().status }));
 
 // Cap open SSE streams per IP (a venue NAT can put many judges behind one address, so keep it generous).
 const MAX_STREAMS_PER_IP = Number(process.env.MAX_STREAMS_PER_IP ?? 30);

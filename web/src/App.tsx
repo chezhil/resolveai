@@ -141,6 +141,7 @@ function Header({ snap, connected, onReset }: { snap: Snapshot; connected: boole
           <SimControls snap={snap} brainLabel={brainLabel} onReset={onReset} />
         </div>
       )}
+      {snap.models?.status === "degraded" && <DegradedBanner snap={snap} />}
       <nav aria-label="Pages" className="scroll-thin mt-2 flex w-max max-w-full gap-0.5 overflow-x-auto rounded-full border border-line bg-white p-0.5">
         {PAGES.map((p) => (
           <AppNavLink
@@ -198,6 +199,24 @@ function SimControls({ snap, brainLabel, onReset }: { snap: Snapshot; brainLabel
         Reset
       </Button>
     </>
+  );
+}
+
+/** Shown while the models are down: the app keeps working on the deterministic planner. */
+function DegradedBanner({ snap }: { snap: Snapshot }) {
+  const r = snap.metrics.resilience;
+  const retry = snap.models.retryAt ? new Date(snap.models.retryAt).toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit", second: "2-digit" }) : null;
+  return (
+    <div role="status" className="mt-2 rounded-lg border border-line bg-sun/40 px-3 py-1.5 text-[12.5px]">
+      <b>Degraded mode:</b> models unavailable, so the deterministic planner is running cases through the same policy engine and verifier.
+      {retry ? ` Models retried at ${retry}.` : ""}
+      {r && (r.degradedCases || r.failedSafe) ? (
+        <span className="text-muted">
+          {" "}
+          · {r.degradedCases} on planner · {r.takeovers} taken over mid-case · {r.failedSafe} to humans
+        </span>
+      ) : null}
+    </div>
   );
 }
 

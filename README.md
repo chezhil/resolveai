@@ -44,7 +44,7 @@ ResolveAI owns the case from **first signal to confirmed closure**:
 | ![L2 approval](docs/media/03-l2-approval.png) | ![Guardrail escalation](docs/media/04-guardrail-escalation.png) |
 | **L2:** penny-drop clears the blocker, then one-click human approval | **L3:** PII redacted, payout change blocked by policy, fraud desk gets the case file |
 | ![Evals](docs/media/05-evals.png) | ![Audit tamper](docs/media/06-audit-tamper.png) |
-| **32/32 golden cases, incl. 11 red-team attacks** + shadow replay against human decisions | **Anchored audit log:** even a full re-hash of the chain contradicts the published anchors |
+| **35/35 golden cases, incl. 11 red-team attacks** + shadow replay against human decisions | **Anchored audit log:** even a full re-hash of the chain contradicts the published anchors |
 
 ## Run it
 
@@ -88,8 +88,8 @@ The full script is in [docs/DEMO.md](docs/DEMO.md).
 3. **C · Arjun's chargeback.** Five evidence items (QR scan, PIN auth, soundbox log, invoice, geo) are filed a day before the deadline, with an NPCI ack.
 4. **D · "Change my payout account, urgent."** PII is redacted before the model sees it (`<ACCOUNT_1>`, `<PHONE_1>`). Policy **P1 blocks** the change, the SIM-swap risk flag forces L3, and the fraud desk gets a complete case file.
 5. **E · Proactive.** A stuck ₹2,350 payment is detected on the event stream after 10 minutes, and the merchant hears from us before they complain.
-6. Toggle **Model outage**, then run any scenario: the case fails safe to the human queue with no half-finished actions.
-7. **Evals & shadow** tab: 32/32 golden cases, including 11 red-team attacks, plus the shadow replay. **Audit log** tab: **Tamper: rewrite chain** re-hashes the whole chain so it still "verifies", and the published anchors catch it anyway.
+6. Toggle **Model outage**, then run **A**: a *Degraded mode* banner appears and the deterministic planner resolves the case through the same policy engine. If a model dies mid-case *after* a money action, the case fails safe to a human instead of replaying it.
+7. **Evals & shadow** tab: 35/35 golden cases, including 11 red-team attacks, plus the shadow replay. **Audit log** tab: **Tamper: rewrite chain** re-hashes the whole chain so it still "verifies", and the published anchors catch it anyway.
 
 ## Architecture
 
@@ -135,7 +135,7 @@ flowchart LR
 
 - **Groq** is the primary brain because latency matters when a merchant is standing at the counter. Model: `GROQ_MODEL`, or auto-picked from the live `/models` list (prefers `openai/gpt-oss-120b`).
 - **Gemini** is the fallback: if Groq errors or times out, the same conversation continues on Gemini via its OpenAI-compatible endpoint. Model: `GEMINI_MODEL`, or the newest stable Flash on the account.
-- If **both** fail, the case fails safe to the human queue with the case file attached (guardrail 6).
+- If **both** fail, a circuit breaker opens (`MODEL_COOLDOWN_MS`, default 60 s) and the case runs in **degraded mode** on the deterministic planner: new cases start on it, and a case already in flight is taken over if no action has run yet. A case that already acted, is awaiting approval, or doesn't match a known workflow fails safe to the human queue with the case file (guardrail 6). Each provider call times out after `MODEL_TIMEOUT_MS` (default 20 s).
 
 The brain is swappable because nothing it says is trusted: facts come only from tool output, the policy engine decides, and the verifier re-reads the systems of record.
 
@@ -152,7 +152,7 @@ The model is treated as untrusted. Seven independent layers sit between what it 
 | **Rate limiting & anomaly flags** | Per-merchant message limits (8 per 10 min) with `INBOUND_FLOOD` flagging, plus per-IP API limits on the public deploy | `screenInbound`, `limiter()`; R05 |
 | **Encrypted, shredded PII** | Phone, VPA, PAN, Aadhaar, card and account numbers are tokenised before the model sees them, held only as AES-256-GCM ciphertext with an HMAC index, and **crypto-shredded when the case closes**. Outbound messages are scanned for leaks. | [`core/pii.ts`](server/src/core/pii.ts); R10, R11 |
 | **Anchored audit log** | SHA-256 hash chain; the head is HMAC-signed and published every 10 entries and at every close (file sink, plus a GitHub Gist with `GITHUB_TOKEN` + `ANCHOR_GIST_ID`). A full consistent rewrite still contradicts the anchors. | [`core/audit.ts`](server/src/core/audit.ts), [`core/anchor.ts`](server/src/core/anchor.ts); G13, R09 |
-| **Fail-safe** | Model or tool outage → human queue with the case file, no half-finished actions | `failSafe()`; G12 |
+| **Degraded mode** | Model outage → circuit breaker → deterministic planner keeps resolving through the same policy engine; takeover only before any action, otherwise human queue with the case file | `takeover()`, `failSafe()`; G12, G23, G24 |
 
 **Fast:** every step in the trace shows its compute time (⚡), and the dashboard reports p50/p95 time to the first action. With the offline planner the agent proposes its first action in **about 1–7 ms of compute**; with Groq the model call dominates and is shown per step. The demo's step-by-step animation is deliberate pacing and is excluded from these numbers.
 
@@ -167,7 +167,7 @@ npm run eval
 ```
 
 - New here? Read [docs/NEXT_TEAMMATE.md](docs/NEXT_TEAMMATE.md) first, then [docs/HANDOFF.md](docs/HANDOFF.md).
-- **32 golden cases** (workflows, guardrails, prompt injection, proactive, resilience, and 11 red-team attacks). Each one runs in a fresh, isolated simulated world and asserts on the **systems of record** (ledger credited, settlement UTR, dispute ack, payout account unchanged), not on the agent's text.
+- **35 golden cases** (workflows, guardrails, prompt injection, proactive, resilience, and 11 red-team attacks). Each one runs in a fresh, isolated simulated world and asserts on the **systems of record** (ledger credited, settlement UTR, dispute ack, payout account unchanged), not on the agent's text.
 - **Shadow replay** runs the agent with actions recorded but not executed on 14 historical tickets, scored against the action an ops reviewer marked as the right call. Current result: the **agent makes the right call on 100%, the human agents on 79%**, and the two agree on 86%. Six tickets are deliberately hard: an account takeover a human fell for, a refund that should have been a push credit, a ticket raised for a payment that didn't exist. The last gap, duplicate debits, is closed by the duplicate-debit workflow (policy P14: refund only the later of two identical credited payments from one payer). The tickets are synthetic stand-ins for the anonymised set we'd request from Paytm.
 - `npm run eval -- --llm` runs the same golden cases against Groq/Gemini.
 - CI ([.github/workflows/ci.yml](.github/workflows/ci.yml)) typechecks and runs tests and evals on every push.
