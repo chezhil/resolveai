@@ -28,10 +28,16 @@ import { randomBytes } from "node:crypto";
 import { MockPaytmPg, type PaytmPg } from "../integrations/paytm.js";
 import { CapabilityIssuer } from "./capability.js";
 import { AnchorLog } from "./anchor.js";
+import { ClientError } from "./errors.js";
+import { isNamedHuman } from "./approvers.js";
 import { MONEY_TOOLS } from "../policy/engine.js";
 import { performance } from "node:perf_hooks";
 
-export class RateLimited extends Error {}
+export class RateLimited extends ClientError {
+  constructor(message: string) {
+    super(message, 429);
+  }
+}
 import { triage, type Triage } from "../agent/triage.js";
 import { detectLang, render, soundboxLine } from "../sim/lang.js";
 
@@ -107,7 +113,7 @@ export class Runtime extends EventEmitter {
   /** A merchant (or the event stream) reports a problem: open a case and start working it. */
   inbound(merchantId: string, text: string, channel: Channel = "whatsapp", opts: { proactive?: boolean } = {}) {
     const merchant = this.world.merchants.get(merchantId);
-    if (!merchant) throw new Error(`Unknown merchant ${merchantId}`);
+    if (!merchant) throw new ClientError(`Unknown merchant ${merchantId}`, 404);
     if (!opts.proactive) this.screenInbound(merchantId, text);
 
     // Repeat contact on an open case: attach to it instead of opening a duplicate.
@@ -225,12 +231,12 @@ export class Runtime extends EventEmitter {
 
   decideApproval(approvalId: string, decision: "APPROVED" | "REJECTED", by = "ops-lead") {
     const a = this.approvals.get(approvalId);
-    if (!a || a.status !== "PENDING") throw new Error("Approval not pending");
+    if (!a || a.status !== "PENDING") throw new ClientError("Approval not pending", 409);
     const kase = this.cases.get(a.caseId)!;
-    if (!by || /^(agent|system|policy)/i.test(by)) throw new Error("Approvals must come from a named human");
+    if (!isNamedHuman(by)) throw new ClientError("Approvals must come from a named human", 403);
     if (decision === "APPROVED") {
       // P13 — two-person rule: the same human can't count twice.
-      if (a.approvals.some((x) => x.by === by)) throw new Error(`Two-person rule: ${by} has already approved; a different approver must confirm`);
+      if (a.approvals.some((x) => x.by === by)) throw new ClientError(`Two-person rule: ${by} has already approved; a different approver must confirm`, 409);
       a.approvals.push({ by, at: this.world.now() });
       this.audit.append(kase.id, `human:${by}`, "approval.signed", { approvalId, signatures: a.approvals.length, required: a.required }, this.world.now());
       if (a.approvals.length < a.required) {
@@ -275,8 +281,8 @@ export class Runtime extends EventEmitter {
   /** One-tap CSAT from the merchant after a verified close. */
   rate(caseId: string, score: number) {
     const kase = this.cases.get(caseId);
-    if (!kase) throw new Error("Unknown case");
-    if (kase.status !== "RESOLVED") throw new Error("Only verified, closed cases can be rated");
+    if (!kase) throw new ClientError("Unknown case", 404);
+    if (kase.status !== "RESOLVED") throw new ClientError("Only verified, closed cases can be rated", 409);
     kase.csat = Math.max(1, Math.min(5, Math.round(score)));
     this.audit.append(kase.id, "merchant", "csat", { score: kase.csat }, this.world.now());
     this.emitUpdate();
